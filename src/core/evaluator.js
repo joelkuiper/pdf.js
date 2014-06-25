@@ -22,7 +22,8 @@
            stdFontMap, symbolsFonts, getTilingPatternIR, warn, Util, Promise,
            RefSetCache, isRef, TextRenderingMode, CMapFactory, OPS,
            UNSUPPORTED_FEATURES, UnsupportedManager, NormalizedUnicodes,
-           IDENTITY_MATRIX, reverseIfRtl, createPromiseCapability */
+           IDENTITY_MATRIX, reverseIfRtl, createPromiseCapability,
+           getFontType */
 
 'use strict';
 
@@ -546,11 +547,28 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       }
 
       translatedPromise.then(function (translatedFont) {
+        if (translatedFont.fontType !== undefined) {
+          var xrefFontStats = xref.stats.fontTypes;
+          xrefFontStats[translatedFont.fontType] = true;
+        }
+
         fontCapability.resolve(new TranslatedFont(font.loadedName,
           translatedFont, font));
       }, function (reason) {
         // TODO fontCapability.reject?
         UnsupportedManager.notify(UNSUPPORTED_FEATURES.font);
+
+        try {
+          // error, but it's still nice to have font type reported
+          var descriptor = preEvaluatedFont.descriptor;
+          var fontFile3 = descriptor && descriptor.get('FontFile3');
+          var subtype = fontFile3 && fontFile3.get('Subtype');
+          var fontType = getFontType(preEvaluatedFont.type,
+                                     subtype && subtype.name);
+          var xrefFontStats = xref.stats.fontTypes;
+          xrefFontStats[fontType] = true;
+        } catch (ex) { }
+
         fontCapability.resolve(new TranslatedFont(font.loadedName,
           new ErrorFont(reason instanceof Error ? reason.message : reason),
           font));
@@ -620,9 +638,9 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
 
       return new Promise(function next(resolve, reject) {
         timeSlotManager.reset();
-        var stop, operation, i, ii, cs;
+        var stop, operation = {}, i, ii, cs;
         while (!(stop = timeSlotManager.check()) &&
-               (operation = preprocessor.read())) {
+               preprocessor.read(operation)) {
           var args = operation.args;
           var fn = operation.fn;
 
@@ -635,7 +653,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               var name = args[0].name;
               if (imageCache.key === name) {
                 operatorList.addOp(imageCache.fn, imageCache.args);
-                args = [];
+                args = null;
                 continue;
               }
 
@@ -659,7 +677,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                 } else if (type.name === 'Image') {
                   self.buildPaintImageXObject(resources, xobj, false,
                     operatorList, name, imageCache);
-                  args = [];
+                  args = null;
                   continue;
                 } else if (type.name === 'PS') {
                   // PostScript XObjects are unused when viewing documents.
@@ -685,12 +703,12 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               var cacheKey = args[0].cacheKey;
               if (cacheKey && imageCache.key === cacheKey) {
                 operatorList.addOp(imageCache.fn, imageCache.args);
-                args = [];
+                args = null;
                 continue;
               }
               self.buildPaintImageXObject(resources, args[0], true,
                 operatorList, cacheKey, imageCache);
-              args = [];
+              args = null;
               continue;
             case OPS.showText:
               args[0] = self.handleText(args[0], stateManager.state);
@@ -834,6 +852,9 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
             case OPS.closePath:
               self.buildPath(operatorList, fn, args);
               continue;
+            case OPS.rectangle:
+              self.buildPath(operatorList, fn, args);
+              continue;
           }
           operatorList.addOp(fn, args);
         }
@@ -876,7 +897,6 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
 
       var preprocessor = new EvaluatorPreprocessor(stream, xref, stateManager);
 
-      var operation;
       var textState;
 
       function newTextChunk() {
@@ -890,7 +910,9 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
           };
         }
         return {
-          str: '',
+          // |str| is initially an array which we push individual chars to, and
+          // then runBidi() overwrites it with the final string.
+          str: [],
           dir: null,
           width: 0,
           height: 0,
@@ -900,7 +922,8 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       }
 
       function runBidi(textChunk) {
-        var bidiResult = PDFJS.bidi(textChunk.str, -1, textState.font.vertical);
+        var str = textChunk.str.join('');
+        var bidiResult = PDFJS.bidi(str, -1, textState.font.vertical);
         textChunk.str = bidiResult.str;
         textChunk.dir = bidiResult.dir;
         return textChunk;
@@ -990,7 +1013,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
           }
           textState.translateTextMatrix(tx, ty);
 
-          textChunk.str += glyphUnicode;
+          textChunk.str.push(glyphUnicode);
         }
 
         var a = textState.textLineMatrix[0];
@@ -1011,9 +1034,9 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
 
       return new Promise(function next(resolve, reject) {
         timeSlotManager.reset();
-        var stop;
+        var stop, operation = {};
         while (!(stop = timeSlotManager.check()) &&
-               (operation = preprocessor.read())) {
+               (preprocessor.read(operation))) {
           textState = stateManager.state;
           var fn = operation.fn;
           var args = operation.args;
@@ -1085,10 +1108,10 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                     if (fakeSpaces > MULTI_SPACE_FACTOR) {
                       fakeSpaces = Math.round(fakeSpaces);
                       while (fakeSpaces--) {
-                        textChunk.str += ' ';
+                        textChunk.str.push(' ');
                       }
                     } else if (fakeSpaces > SPACE_FACTOR) {
-                      textChunk.str += ' ';
+                      textChunk.str.push(' ');
                     }
                   }
                 }
@@ -1120,7 +1143,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               var name = args[0].name;
               if (xobjsCache.key === name) {
                 if (xobjsCache.texts) {
-                  Util.concatenateToArray(bidiTexts, xobjsCache.texts.items);
+                  Util.appendToArray(bidiTexts, xobjsCache.texts.items);
                   Util.extendObj(textContent.styles, xobjsCache.texts.styles);
                 }
                 break;
@@ -1151,7 +1174,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
               return self.getTextContent(xobj,
                 xobj.dict.get('Resources') || resources, stateManager).
                 then(function (formTextContent) {
-                  Util.concatenateToArray(bidiTexts, formTextContent.items);
+                  Util.appendToArray(bidiTexts, formTextContent.items);
                   Util.extendObj(textContent.styles, formTextContent.styles);
                   stateManager.restore();
 
@@ -1542,6 +1565,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         dict: dict,
         baseDict: baseDict,
         composite: composite,
+        type: type.name,
         hash: hash ? hash.hexdigest() : ''
       };
     },
@@ -1552,16 +1576,16 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       var dict = preEvaluatedFont.dict;
       var composite = preEvaluatedFont.composite;
       var descriptor = preEvaluatedFont.descriptor;
-      var type = dict.get('Subtype');
+      var type = preEvaluatedFont.type;
       var maxCharIndex = (composite ? 0xFFFF : 0xFF);
       var properties;
 
       if (!descriptor) {
-        if (type.name === 'Type3') {
+        if (type === 'Type3') {
           // FontDescriptor is only required for Type3 fonts when the document
           // is a tagged pdf. Create a barbebones one to get by.
           descriptor = new Dict(null);
-          descriptor.set('FontName', Name.get(type.name));
+          descriptor.set('FontName', Name.get(type));
         } else {
           // Before PDF 1.5 if the font was one of the base 14 fonts, having a
           // FontDescriptor was not required.
@@ -1584,7 +1608,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
                                              FontFlags.Nonsymbolic);
 
           properties = {
-            type: type.name,
+            type: type,
             name: baseFontName,
             widths: metrics.widths,
             defaultWidth: metrics.defaultWidth,
@@ -1617,7 +1641,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
         baseFont = Name.get(baseFont);
       }
 
-      if (type.name !== 'Type3') {
+      if (type !== 'Type3') {
         var fontNameStr = fontName && fontName.name;
         var baseFontStr = baseFont && baseFont.name;
         if (fontNameStr !== baseFontStr) {
@@ -1649,7 +1673,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       }
 
       properties = {
-        type: type.name,
+        type: type,
         name: fontName.name,
         subtype: subtype,
         file: fontFile,
@@ -1684,7 +1708,7 @@ var PartialEvaluator = (function PartialEvaluatorClosure() {
       this.extractDataStructures(dict, baseDict, xref, properties);
       this.extractWidths(dict, xref, descriptor, properties);
 
-      if (type.name === 'Type3') {
+      if (type === 'Type3') {
         properties.isType3Font = true;
       }
 
@@ -2077,63 +2101,75 @@ var EvaluatorPreprocessor = (function EvaluatorPreprocessorClosure() {
       return this.stateManager.stateStack.length;
     },
 
-    read: function EvaluatorPreprocessor_read() {
-      var args = [];
+    read: function EvaluatorPreprocessor_read(operation) {
+      // We use an array to represent args, except we use |null| to represent
+      // no args because it's more compact than an empty array.
+      var args = null;
       while (true) {
         var obj = this.parser.getObj();
-        if (isEOF(obj)) {
-          return null; // no more commands
-        }
-        if (!isCmd(obj)) {
+        if (isCmd(obj)) {
+          var cmd = obj.cmd;
+          // Check that the command is valid
+          var opSpec = OP_MAP[cmd];
+          if (!opSpec) {
+            warn('Unknown command "' + cmd + '"');
+            continue;
+          }
+
+          var fn = opSpec.id;
+          var numArgs = opSpec.numArgs;
+
+          if (!opSpec.variableArgs) {
+            // Postscript commands can be nested, e.g. /F2 /GS2 gs 5.711 Tf
+            var argsLength = args !== null ? args.length : 0;
+            if (argsLength !== numArgs) {
+              var nonProcessedArgs = this.nonProcessedArgs;
+              while (argsLength > numArgs) {
+                nonProcessedArgs.push(args.shift());
+                argsLength--;
+              }
+              while (argsLength < numArgs && nonProcessedArgs.length !== 0) {
+                if (!args) {
+                  args = [];
+                }
+                args.unshift(nonProcessedArgs.pop());
+                argsLength++;
+              }
+            }
+
+            if (argsLength < numArgs) {
+              // If we receive too few args, it's not possible to possible
+              // to execute the command, so skip the command
+              info('Command ' + fn + ': because expected ' +
+                   numArgs + ' args, but received ' + argsLength +
+                   ' args; skipping');
+              args = null;
+              continue;
+            }
+          } else if (argsLength > numArgs) {
+            info('Command ' + fn + ': expected [0,' + numArgs +
+                 '] args, but received ' + argsLength + ' args');
+          }
+
+          // TODO figure out how to type-check vararg functions
+          this.preprocessCommand(fn, args);
+
+          operation.fn = fn;
+          operation.args = args;
+          return true;
+        } else {
+          if (isEOF(obj)) {
+            return false; // no more commands
+          }
           // argument
           if (obj !== null) {
+            if (!args) {
+              args = [];
+            }
             args.push((obj instanceof Dict ? obj.getAll() : obj));
             assert(args.length <= 33, 'Too many arguments');
           }
-          continue;
         }
-
-        var cmd = obj.cmd;
-        // Check that the command is valid
-        var opSpec = OP_MAP[cmd];
-        if (!opSpec) {
-          warn('Unknown command "' + cmd + '"');
-          continue;
-        }
-
-        var fn = opSpec.id;
-        var numArgs = opSpec.numArgs;
-
-        if (!opSpec.variableArgs) {
-          // Some post script commands can be nested, e.g. /F2 /GS2 gs 5.711 Tf
-          if (args.length !== numArgs) {
-            var nonProcessedArgs = this.nonProcessedArgs;
-            while (args.length > numArgs) {
-              nonProcessedArgs.push(args.shift());
-            }
-            while (args.length < numArgs && nonProcessedArgs.length !== 0) {
-              args.unshift(nonProcessedArgs.pop());
-            }
-          }
-
-          if (args.length < numArgs) {
-            // If we receive too few args, it's not possible to possible
-            // to execute the command, so skip the command
-            info('Command ' + fn + ': because expected ' +
-                 numArgs + ' args, but received ' + args.length +
-                 ' args; skipping');
-            args = [];
-            continue;
-          }
-        } else if (args.length > numArgs) {
-          info('Command ' + fn + ': expected [0,' + numArgs +
-               '] args, but received ' + args.length + ' args');
-        }
-
-        // TODO figure out how to type-check vararg functions
-        this.preprocessCommand(fn, args);
-
-        return { fn: fn, args: args };
       }
     },
 

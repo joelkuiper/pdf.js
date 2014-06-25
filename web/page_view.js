@@ -322,16 +322,15 @@ var PageView = function pageView(container, id, scale,
       } else {
         for (i = 0, ii = annotationsData.length; i < ii; i++) {
           data = annotationsData[i];
-          var annotation = PDFJS.Annotation.fromData(data);
-          if (!annotation || !annotation.hasHtml()) {
+          if (!data || !data.hasHtml) {
             continue;
           }
 
-          element = annotation.getHtmlElement(pdfPage.commonObjs);
+          element = PDFJS.AnnotationUtils.getHtmlElement(data,
+                                                         pdfPage.commonObjs);
           element.setAttribute('data-annotation-id', data.id);
           mozL10n.translate(element);
 
-          data = annotation.getData();
           var rect = data.rect;
           var view = pdfPage.view;
           rect = PDFJS.Util.normalizeRect([
@@ -630,7 +629,13 @@ var PageView = function pageView(container, id, scale,
 //    FirefoxCom.request('reportTelemetry', JSON.stringify({
 //      type: 'pageInfo'
 //    }));
-//    // TODO add stream types report here
+//    // It is a good time to report stream and font types
+//    PDFView.pdfDocument.getStats().then(function (stats) {
+//      FirefoxCom.request('reportTelemetry', JSON.stringify({
+//        type: 'documentStats',
+//        stats: stats
+//      }));
+//    });
 //#endif
       callback();
     }
