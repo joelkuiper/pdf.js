@@ -233,6 +233,9 @@ var PDFView = {
       Preferences.get('sidebarViewOnLoad').then(function resolved(value) {
         self.preferenceSidebarViewOnLoad = value;
       }),
+      Preferences.get('pdfBugEnabled').then(function resolved(value) {
+        self.preferencesPdfBugEnabled = value;
+      }),
       Preferences.get('disableTextLayer').then(function resolved(value) {
         if (PDFJS.disableTextLayer === true) {
           return;
@@ -359,7 +362,9 @@ var PDFView = {
           scale = Math.min(pageWidthScale, pageHeightScale);
           break;
         case 'auto':
-          scale = Math.min(MAX_AUTO_SCALE, pageWidthScale);
+          var isLandscape = (currentPage.width > currentPage.height);
+          var horizontalScale = isLandscape ? pageHeightScale : pageWidthScale;
+          scale = Math.min(MAX_AUTO_SCALE, horizontalScale);
           break;
         default:
           console.error('pdfViewSetScale: \'' + value +
@@ -631,7 +636,7 @@ var PDFView = {
   },
 
   // TODO(mack): This function signature should really be pdfViewOpen(url, args)
-  open: function pdfViewOpen(url, scale, password,
+  open: function pdfViewOpen(file, scale, password,
                              pdfDataRangeTransport, args) {
     if (this.pdfDocument) {
       // Reload the preferences if a document was previously opened.
@@ -640,11 +645,14 @@ var PDFView = {
     this.close();
 
     var parameters = {password: password};
-    if (typeof url === 'string') { // URL
-      this.setTitleUsingUrl(url);
-      parameters.url = url;
-    } else if (url && 'byteLength' in url) { // ArrayBuffer
-      parameters.data = url;
+    if (typeof file === 'string') { // URL
+      this.setTitleUsingUrl(file);
+      parameters.url = file;
+    } else if (file && 'byteLength' in file) { // ArrayBuffer
+      parameters.data = file;
+    } else if (file.url && file.originalUrl) {
+      this.setTitleUsingUrl(file.originalUrl);
+      parameters.url = file.url;
     }
     if (args) {
       for (var prop in args) {
@@ -672,30 +680,27 @@ var PDFView = {
         self.load(pdfDocument, scale);
         self.loading = false;
       },
-      function getDocumentError(message, exception) {
+      function getDocumentError(exception) {
+        var message = exception && exception.message;
         var loadingErrorMessage = mozL10n.get('loading_error', null,
           'An error occurred while loading the PDF.');
 
-        if (exception && exception.name === 'InvalidPDFException') {
+        if (exception instanceof PDFJS.InvalidPDFException) {
           // change error message also for other builds
           loadingErrorMessage = mozL10n.get('invalid_file_error', null,
-                                        'Invalid or corrupted PDF file.');
-//#if B2G
-//        window.alert(loadingErrorMessage);
-//        return window.close();
-//#endif
-        }
-
-        if (exception && exception.name === 'MissingPDFException') {
+                                            'Invalid or corrupted PDF file.');
+        } else if (exception instanceof PDFJS.MissingPDFException) {
           // special message for missing PDF's
           loadingErrorMessage = mozL10n.get('missing_file_error', null,
-                                        'Missing PDF file.');
-
-//#if B2G
-//        window.alert(loadingErrorMessage);
-//        return window.close();
-//#endif
+                                            'Missing PDF file.');
+        } else if (exception instanceof PDFJS.UnexpectedResponseException) {
+          loadingErrorMessage = mozL10n.get('unexpected_response_error', null,
+                                            'Unexpected server response.');
         }
+//#if B2G
+//      window.alert(loadingErrorMessage);
+//      return window.close();
+//#endif
 
         var moreInfo = {
           message: message
@@ -1162,7 +1167,11 @@ var PDFView = {
 
       var pdfTitle;
       if (metadata && metadata.has('dc:title')) {
-        pdfTitle = metadata.get('dc:title');
+        var title = metadata.get('dc:title');
+        // Ghostscript sometimes return 'Untitled', sets the title to 'Untitled'
+        if (title !== 'Untitled') {
+          pdfTitle = title;
+        }
       }
 
       if (!pdfTitle && info && info['Title']) {
@@ -1211,7 +1220,7 @@ var PDFView = {
   setInitialView: function pdfViewSetInitialView(storedHash, scale) {
     // Reset the current scale, as otherwise the page's scale might not get
     // updated if the zoom level stayed the same.
-    this.currentScale = 0;
+    this.currentScale = UNKNOWN_SCALE;
     this.currentScaleValue = null;
     // When opening a new file (when one is already loaded in the viewer):
     // Reset 'currentPageNumber', since otherwise the page's scale will be wrong
@@ -1549,7 +1558,7 @@ var PDFView = {
     var params = {};
     for (var i = 0, ii = parts.length; i < ii; ++i) {
       var param = parts[i].split('=');
-      var key = param[0];
+      var key = param[0].toLowerCase();
       var value = param.length > 1 ? param[1] : null;
       params[decodeURIComponent(key)] = decodeURIComponent(value);
     }
@@ -1759,60 +1768,81 @@ function webViewerInitialized() {
 //document.getElementById('secondaryOpenFile').setAttribute('hidden', 'true');
 //#endif
 
-  // Special debugging flags in the hash section of the URL.
-  var hash = document.location.hash.substring(1);
-  var hashParams = PDFView.parseQueryString(hash);
-
-  if ('disableWorker' in hashParams) {
-    PDFJS.disableWorker = (hashParams['disableWorker'] === 'true');
-  }
-
-  if ('disableRange' in hashParams) {
-    PDFJS.disableRange = (hashParams['disableRange'] === 'true');
-  }
-
-  if ('disableAutoFetch' in hashParams) {
-    PDFJS.disableAutoFetch = (hashParams['disableAutoFetch'] === 'true');
-  }
-
-  if ('disableFontFace' in hashParams) {
-    PDFJS.disableFontFace = (hashParams['disableFontFace'] === 'true');
-  }
-
-  if ('disableHistory' in hashParams) {
-    PDFJS.disableHistory = (hashParams['disableHistory'] === 'true');
-  }
-
-  if ('webgl' in hashParams) {
-    PDFJS.disableWebGL = (hashParams['webgl'] !== 'true');
-  }
-
-  if ('useOnlyCssZoom' in hashParams) {
-    PDFJS.useOnlyCssZoom = (hashParams['useOnlyCssZoom'] === 'true');
-  }
-
-  if ('verbosity' in hashParams) {
-    PDFJS.verbosity = hashParams['verbosity'] | 0;
-  }
-
-  if ('ignoreCurrentPositionOnZoom' in hashParams) {
-    IGNORE_CURRENT_POSITION_ON_ZOOM =
-      (hashParams['ignoreCurrentPositionOnZoom'] === 'true');
-  }
-
-//#if !PRODUCTION
-  if ('disableBcmaps' in hashParams && hashParams['disableBcmaps']) {
-    PDFJS.cMapUrl = '../external/cmaps/';
-    PDFJS.cMapPacked = false;
-  }
-//#endif
-
-
 //#if !(FIREFOX || MOZCENTRAL)
   var locale = PDFJS.locale || navigator.language;
-  if ('locale' in hashParams) {
-    locale = hashParams['locale'];
+//#endif
+
+//#if !PRODUCTION
+  if (true) {
+//#else
+//if (PDFView.preferencesPdfBugEnabled) {
+//#endif
+    // Special debugging flags in the hash section of the URL.
+    var hash = document.location.hash.substring(1);
+    var hashParams = PDFView.parseQueryString(hash);
+
+    if ('disableworker' in hashParams) {
+      PDFJS.disableWorker = (hashParams['disableworker'] === 'true');
+    }
+    if ('disablerange' in hashParams) {
+      PDFJS.disableRange = (hashParams['disablerange'] === 'true');
+    }
+    if ('disableautofetch' in hashParams) {
+      PDFJS.disableAutoFetch = (hashParams['disableautofetch'] === 'true');
+    }
+    if ('disablefontface' in hashParams) {
+      PDFJS.disableFontFace = (hashParams['disablefontface'] === 'true');
+    }
+    if ('disablehistory' in hashParams) {
+      PDFJS.disableHistory = (hashParams['disablehistory'] === 'true');
+    }
+    if ('webgl' in hashParams) {
+      PDFJS.disableWebGL = (hashParams['webgl'] !== 'true');
+    }
+    if ('useonlycsszoom' in hashParams) {
+      PDFJS.useOnlyCssZoom = (hashParams['useonlycsszoom'] === 'true');
+    }
+    if ('verbosity' in hashParams) {
+      PDFJS.verbosity = hashParams['verbosity'] | 0;
+    }
+    if ('ignorecurrentpositiononzoom' in hashParams) {
+      IGNORE_CURRENT_POSITION_ON_ZOOM =
+        (hashParams['ignorecurrentpositiononzoom'] === 'true');
+    }
+//#if !PRODUCTION
+    if ('disablebcmaps' in hashParams && hashParams['disablebcmaps']) {
+      PDFJS.cMapUrl = '../external/cmaps/';
+      PDFJS.cMapPacked = false;
+    }
+//#endif
+//#if !(FIREFOX || MOZCENTRAL)
+    if ('locale' in hashParams) {
+      locale = hashParams['locale'];
+    }
+//#endif
+    if ('textlayer' in hashParams) {
+      switch (hashParams['textlayer']) {
+        case 'off':
+          PDFJS.disableTextLayer = true;
+          break;
+        case 'visible':
+        case 'shadow':
+        case 'hover':
+          var viewer = document.getElementById('viewer');
+          viewer.classList.add('textLayer-' + hashParams['textlayer']);
+          break;
+      }
+    }
+    if ('pdfbug' in hashParams) {
+      PDFJS.pdfBug = true;
+      var pdfBug = hashParams['pdfbug'];
+      var enabled = pdfBug.split(',');
+      PDFBug.enable(enabled);
+      PDFBug.init();
+    }
   }
+
+//#if !(FIREFOX || MOZCENTRAL)
   mozL10n.setLanguage(locale);
 //#endif
 //#if (FIREFOX || MOZCENTRAL)
@@ -1822,32 +1852,6 @@ function webViewerInitialized() {
 //    'Web fonts are disabled: unable to use embedded PDF fonts.'));
 //}
 //#endif
-
-  if ('textLayer' in hashParams) {
-    switch (hashParams['textLayer']) {
-      case 'off':
-        PDFJS.disableTextLayer = true;
-        break;
-      case 'visible':
-      case 'shadow':
-      case 'hover':
-        var viewer = document.getElementById('viewer');
-        viewer.classList.add('textLayer-' + hashParams['textLayer']);
-        break;
-    }
-  }
-
-//#if !(FIREFOX || MOZCENTRAL)
-  if ('pdfBug' in hashParams) {
-//#else
-//if ('pdfBug' in hashParams && FirefoxCom.requestSync('pdfBugEnabled')) {
-//#endif
-    PDFJS.pdfBug = true;
-    var pdfBug = hashParams['pdfBug'];
-    var enabled = pdfBug.split(',');
-    PDFBug.enable(enabled);
-    PDFBug.init();
-  }
 
   if (!PDFView.supportsPrinting) {
     document.getElementById('print').classList.add('hidden');
@@ -2155,9 +2159,12 @@ window.addEventListener('localized', function localized(evt) {
 
   PDFView.animationStartedPromise.then(function() {
     // Adjust the width of the zoom box to fit the content.
-    // Note: This is only done if the zoom box is actually visible,
-    // since otherwise element.clientWidth will return 0.
+    // Note: If the window is narrow enough that the zoom box is not visible,
+    //       we temporarily show it to be able to adjust its width.
     var container = document.getElementById('scaleSelectContainer');
+    if (container.clientWidth === 0) {
+      container.setAttribute('style', 'display: inherit;');
+    }
     if (container.clientWidth > 0) {
       var select = document.getElementById('scaleSelect');
       select.setAttribute('style', 'min-width: inherit;');
@@ -2516,9 +2523,10 @@ window.addEventListener('afterprint', function afterPrint(evt) {
 //window.navigator.mozSetMessageHandler('activity', function(activity) {
 //  var blob = activity.source.data.blob;
 //  PDFJS.maxImageSize = 1024 * 1024;
+//  var fileURL = activity.source.data.url;
 //
 //  var url = URL.createObjectURL(blob);
-//  PDFView.open(url);
+//  PDFView.open({url : url, originalUrl: fileURL});
 //
 //  var header = document.getElementById('header');
 //  header.addEventListener('action', function() {

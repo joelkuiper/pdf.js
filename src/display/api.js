@@ -14,11 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals CanvasGraphics, combineUrl, createScratchCanvas, error,
-           FontLoader, globalScope, info, isArrayBuffer, loadJpegStream,
-           MessageHandler, PDFJS, Promise, StatTimer, warn,
-           PasswordResponses, Util, loadScript, createPromiseCapability,
-           FontFace */
+/* globals PDFJS, isArrayBuffer, error, combineUrl, createPromiseCapability,
+           StatTimer, globalScope, MessageHandler, info, FontLoader, Util, warn,
+           Promise, PasswordResponses, PasswordException, InvalidPDFException,
+           MissingPDFException, UnknownErrorException, FontFace, loadJpegStream,
+           createScratchCanvas, CanvasGraphics, UnexpectedResponseException */
 
 'use strict';
 
@@ -190,6 +190,11 @@ PDFJS.maxCanvasPixels = (PDFJS.maxCanvasPixels === undefined ?
  * password if wrong or no password was provided. The callback receives two
  * parameters: function that needs to be called with new password and reason
  * (see {PasswordResponses}).
+ *
+ * @param {function} progressCallback is optional. It is used to be able to
+ * monitor the loading progress of the PDF file (necessary to implement e.g.
+ * a loading bar). The callback receives an {Object} with the properties:
+ * {number} loaded and {number} total.
  *
  * @return {Promise} A promise that is resolved with {@link PDFDocumentProxy}
  *   object.
@@ -860,36 +865,46 @@ var WorkerTransport = (function WorkerTransportClosure() {
         this.workerReadyCapability.resolve(pdfDocument);
       }, this);
 
-      messageHandler.on('NeedPassword', function transportPassword(data) {
+      messageHandler.on('NeedPassword',
+                        function transportNeedPassword(exception) {
         if (this.passwordCallback) {
           return this.passwordCallback(updatePassword,
                                        PasswordResponses.NEED_PASSWORD);
         }
-        this.workerReadyCapability.reject(data.exception.message,
-                                          data.exception);
+        this.workerReadyCapability.reject(
+          new PasswordException(exception.message, exception.code));
       }, this);
 
-      messageHandler.on('IncorrectPassword', function transportBadPass(data) {
+      messageHandler.on('IncorrectPassword',
+                        function transportIncorrectPassword(exception) {
         if (this.passwordCallback) {
           return this.passwordCallback(updatePassword,
                                        PasswordResponses.INCORRECT_PASSWORD);
         }
-        this.workerReadyCapability.reject(data.exception.message,
-                                          data.exception);
+        this.workerReadyCapability.reject(
+          new PasswordException(exception.message, exception.code));
       }, this);
 
-      messageHandler.on('InvalidPDF', function transportInvalidPDF(data) {
-        this.workerReadyCapability.reject(data.exception.name, data.exception);
+      messageHandler.on('InvalidPDF', function transportInvalidPDF(exception) {
+        this.workerReadyCapability.reject(
+          new InvalidPDFException(exception.message));
       }, this);
 
-      messageHandler.on('MissingPDF', function transportMissingPDF(data) {
-        this.workerReadyCapability.reject(data.exception.message,
-                                          data.exception);
+      messageHandler.on('MissingPDF', function transportMissingPDF(exception) {
+        this.workerReadyCapability.reject(
+          new MissingPDFException(exception.message));
       }, this);
 
-      messageHandler.on('UnknownError', function transportUnknownError(data) {
-        this.workerReadyCapability.reject(data.exception.message,
-                                          data.exception);
+      messageHandler.on('UnexpectedResponse',
+                        function transportUnexpectedResponse(exception) {
+        this.workerReadyCapability.reject(
+          new UnexpectedResponseException(exception.message, exception.status));
+      }, this);
+
+      messageHandler.on('UnknownError',
+                        function transportUnknownError(exception) {
+        this.workerReadyCapability.reject(
+          new UnknownErrorException(exception.message, exception.details));
       }, this);
 
       messageHandler.on('DataLoaded', function transportPage(data) {
@@ -983,10 +998,6 @@ var WorkerTransport = (function WorkerTransportClosure() {
             total: data.total
           });
         }
-      }, this);
-
-      messageHandler.on('DocError', function transportDocError(data) {
-        this.workerReadyCapability.reject(data);
       }, this);
 
       messageHandler.on('PageError', function transportError(data) {
