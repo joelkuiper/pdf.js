@@ -235,6 +235,13 @@
        "rounds": 1,
        "type": "eq"
     },
+    {  "id": "mmtype1",
+       "file": "pdfs/mmtype1.pdf",
+       "md5": "7d632263d28bc2ff05ee0cc426966a5a",
+       "link": false,
+       "rounds": 1,
+       "type": "eq"
+    },
     {  "id": "openoffice-pdf",
        "file": "pdfs/DiwanProfile.pdf",
        "md5": "55d0c6a1a6d26c9ec9dcecaa7a471e0e",
@@ -305,7 +312,8 @@
       "rounds": 1,
       "type": "eq",
       "link": true,
-      "lastPage": 1
+      "lastPage": 1,
+      "about": "The same file as issue2337."
     },
     {  "id": "thuluthfont-text",
        "file": "pdfs/ThuluthFeatures.pdf",
@@ -870,6 +878,13 @@
        "rounds": 1,
        "type": "eq"
     },
+    {  "id": "ZapfDingbats",
+       "file": "pdfs/ZapfDingbats.pdf",
+       "md5": "980df9b1c86715a3d8aa2d3c807a2b2c",
+       "link": false,
+       "rounds": 1,
+       "type": "eq"
+    },
     {  "id": "issue3323",
        "file": "pdfs/issue3323.pdf",
        "md5": "1a14ff574013caeafa9d598269988764",
@@ -894,6 +909,13 @@
     {  "id": "issue4881",
        "file": "pdfs/issue4881.pdf",
        "md5": "e1f06be05eda4ddf734e9764f3f067f1",
+       "link": false,
+       "rounds": 1,
+       "type": "eq"
+    },
+    {  "id": "issue5244",
+       "file": "pdfs/issue5244.pdf",
+       "md5": "a50cd364c3976c744627b4b9bb90c761",
        "link": false,
        "rounds": 1,
        "type": "eq"
@@ -1077,6 +1099,13 @@
     {  "id": "issue5039",
        "file": "pdfs/issue5039.pdf",
        "md5": "5c131f458ee6b65cc096ccaf0474ee3a",
+       "link": false,
+       "rounds": 1,
+       "type": "eq"
+    },
+    {  "id": "issue5070",
+       "file": "pdfs/issue5070.pdf",
+       "md5": "ec2ca0b4954c8390a5b3b0ffd79a8e92",
        "link": false,
        "rounds": 1,
        "type": "eq"
@@ -1329,14 +1358,6 @@
       "link": true,
       "type": "eq"
     },
-    {  "id": "issue2337",
-      "file": "pdfs/issue2337.pdf",
-      "md5": "ea10f4131202b9b8f2a6cb7770d3f185",
-      "rounds": 1,
-      "lastPage": 1,
-      "link": true,
-      "type": "load"
-    },
     {  "id": "issue2074",
       "file": "pdfs/issue2074.pdf",
       "md5": "5e4ba2241fc35d20e44eb52289a569ab",
@@ -1434,6 +1455,14 @@
       "link": true,
       "type": "eq"
     },
+    {  "id": "bug1011159",
+      "file": "pdfs/bug1011159.pdf",
+      "md5": "4532e22deb92d4cd2992d0cfe255582a",
+      "rounds": 1,
+      "lastPage": 1,
+      "type": "eq",
+      "about": "Type3 font with negative HScale and font size"
+    },
     {  "id": "bug816075",
       "file": "pdfs/bug816075.pdf",
       "md5": "7ec87c115c1f9ec41234cc7002555e82",
@@ -1511,6 +1540,14 @@
       "link": true,
       "type": "eq",
       "about": "True type font with encoding dict with no base encoding but with differences."
+    },
+    {  "id": "issue5280",
+      "file": "pdfs/issue5280.pdf",
+      "md5": "0ea1230e2964e74cb6db063a89b78803",
+      "rounds": 1,
+      "link": false,
+      "type": "eq",
+      "about": "DecodeParams can be an indirect object"
     },
     {  "id": "bug878194",
        "file": "pdfs/bug878194.pdf",
@@ -1682,6 +1719,13 @@
        "file": "pdfs/calgray.pdf",
        "md5": "ee784999bfa1ed373f55cdabbb580df1",
        "rounds": 1,
+       "type": "eq"
+    },
+    {  "id": "calrgb",
+       "file": "pdfs/calrgb.pdf",
+       "md5": "625068e9a7dd80e4f70b24ce97b3ec5c",
+       "rounds": 1,
+       "lastPage": 8,
        "type": "eq"
     },
     {  "id": "bug900822",

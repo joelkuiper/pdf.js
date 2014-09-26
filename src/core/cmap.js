@@ -281,7 +281,7 @@ var CMap = (function CMapClosure() {
       return this._map;
     },
 
-    readCharCode: function(str, offset) {
+    readCharCode: function(str, offset, out) {
       var c = 0;
       var codespaceRanges = this.codespaceRanges;
       var codespaceRangesLen = this.codespaceRanges.length;
@@ -295,26 +295,77 @@ var CMap = (function CMapClosure() {
           var low = codespaceRange[k++];
           var high = codespaceRange[k++];
           if (c >= low && c <= high) {
-            return [c, n + 1];
+            out.charcode = c;
+            out.length = n + 1;
+            return;
           }
         }
       }
-
-      return [0, 1];
+      out.charcode = 0;
+      out.length = 1;
     }
-
   };
   return CMap;
 })();
 
+// A special case of CMap, where the _map array implicitly has a length of
+// 65535 and each element is equal to its index.
 var IdentityCMap = (function IdentityCMapClosure() {
   function IdentityCMap(vertical, n) {
     CMap.call(this);
     this.vertical = vertical;
     this.addCodespaceRange(n, 0, 0xffff);
-    this.mapCidRange(0, 0xffff, 0);
   }
   Util.inherit(IdentityCMap, CMap, {});
+
+  IdentityCMap.prototype = {
+    addCodespaceRange: CMap.prototype.addCodespaceRange,
+
+    mapCidRange: function(low, high, dstLow) {
+      error('should not call mapCidRange');
+    },
+
+    mapBfRange: function(low, high, dstLow) {
+      error('should not call mapBfRange');
+    },
+
+    mapBfRangeToArray: function(low, high, array) {
+      error('should not call mapBfRangeToArray');
+    },
+
+    mapOne: function(src, dst) {
+      error('should not call mapCidOne');
+    },
+
+    lookup: function(code) {
+      return (isInt(code) && code <= 0xffff) ? code : undefined;
+    },
+
+    contains: function(code) {
+      return isInt(code) && code <= 0xffff;
+    },
+
+    forEach: function(callback) {
+      for (var i = 0; i <= 0xffff; i++) {
+        callback(i, i);
+      }
+    },
+
+    charCodeOf: function(value) {
+      return (isInt(value) && value <= 0xffff) ? value : -1;
+    },
+
+    getMap: function() {
+      // Sometimes identity maps must be instantiated, but it's rare.
+      var map = new Array(0x10000);
+      for (var i = 0; i <= 0xffff; i++) {
+        map[i] = i;
+      }
+      return map;
+    },
+
+    readCharCode: CMap.prototype.readCharCode
+  };
 
   return IdentityCMap;
 })();
@@ -336,7 +387,7 @@ var BinaryCMapReader = (function BinaryCMapReaderClosure() {
       request.overrideMimeType('text/plain; charset=x-user-defined');
     }
     request.send(null);
-    if (request.status === 0 && /^https?:/i.test(url)) {
+    if (nonBinaryRequest ? !request.responseText : !request.response) {
       error('Unable to get binary cMap at: ' + url);
     }
     if (nonBinaryRequest) {
@@ -357,6 +408,14 @@ var BinaryCMapReader = (function BinaryCMapReaderClosure() {
   }
 
   function hexToStr(a, size) {
+    // This code is hot. Special-case some common values to avoid creating an
+    // object with subarray().
+    if (size === 1) {
+      return String.fromCharCode(a[0], a[1]);
+    }
+    if (size === 3) {
+      return String.fromCharCode(a[0], a[1], a[2], a[3]);
+    }
     return String.fromCharCode.apply(null, a.subarray(0, size + 1));
   }
 
@@ -868,7 +927,7 @@ var CMapFactory = (function CMapFactoryClosure() {
     var url = builtInCMapParams.url + name;
     request.open('GET', url, false);
     request.send(null);
-    if (request.status === 0 && /^https?:/i.test(url)) {
+    if (!request.responseText) {
       error('Unable to get cMap at: ' + url);
     }
     var cMap = new CMap(true);

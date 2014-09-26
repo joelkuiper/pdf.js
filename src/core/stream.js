@@ -73,6 +73,11 @@ var Stream = (function StreamClosure() {
       this.pos = end;
       return bytes.subarray(pos, end);
     },
+    peekByte: function Stream_peekByte() {
+      var peekedByte = this.getByte();
+      this.pos--;
+      return peekedByte;
+    },
     peekBytes: function Stream_peekBytes(length) {
       var bytes = this.getBytes(length);
       this.pos -= bytes.length;
@@ -201,6 +206,11 @@ var DecodeStream = (function DecodeStreamClosure() {
 
       this.pos = end;
       return this.buffer.subarray(pos, end);
+    },
+    peekByte: function DecodeStream_peekByte() {
+      var peekedByte = this.getByte();
+      this.pos--;
+      return peekedByte;
     },
     peekBytes: function DecodeStream_peekBytes(length) {
       var bytes = this.getBytes(length);
@@ -527,7 +537,7 @@ var FlateStream = (function FlateStreamClosure() {
       var end = bufferLength + blockLen;
       this.bufferLength = end;
       if (blockLen === 0) {
-        if (str.peekBytes(1).length === 0) {
+        if (str.peekByte() === -1) {
           this.eof = true;
         }
       } else {
@@ -1033,7 +1043,8 @@ var Jbig2Stream = (function Jbig2StreamClosure() {
 
     var jbig2Image = new Jbig2Image();
 
-    var chunks = [], decodeParams = this.dict.get('DecodeParms');
+    var chunks = [], xref = this.dict.xref;
+    var decodeParams = xref.fetchIfRef(this.dict.get('DecodeParms'));
 
     // According to the PDF specification, DecodeParms can be either
     // a dictionary, or an array whose elements are dictionaries.
@@ -1042,7 +1053,7 @@ var Jbig2Stream = (function Jbig2StreamClosure() {
         warn('JBIG2 - \'DecodeParms\' array with multiple elements ' +
              'not supported.');
       }
-      decodeParams = decodeParams[0];
+      decodeParams = xref.fetchIfRef(decodeParams[0]);
     }
     if (decodeParams && decodeParams.has('JBIG2Globals')) {
       var globalsStream = decodeParams.get('JBIG2Globals');
@@ -2018,19 +2029,22 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
         }
       }
 
-      if (this.byteAlign) {
-        this.inputBits &= ~7;
-      }
-
       var gotEOL = false;
 
       if (!this.eoblock && this.row === this.rows - 1) {
         this.eof = true;
-      } else {
+      } else if (this.eoline || !this.byteAlign) {
         code1 = this.lookBits(12);
-        while (code1 === 0) {
-          this.eatBits(1);
-          code1 = this.lookBits(12);
+        if (this.eoline) {
+          while (code1 !== EOF && code1 !== 1) {
+            this.eatBits(1);
+            code1 = this.lookBits(12);
+          }
+        } else {
+          while (code1 === 0) {
+            this.eatBits(1);
+            code1 = this.lookBits(12);
+          }
         }
         if (code1 === 1) {
           this.eatBits(12);
@@ -2040,12 +2054,16 @@ var CCITTFaxStream = (function CCITTFaxStreamClosure() {
         }
       }
 
+      if (this.byteAlign && !gotEOL) {
+        this.inputBits &= ~7;
+      }
+
       if (!this.eof && this.encoding > 0) {
         this.nextLine2D = !this.lookBits(1);
         this.eatBits(1);
       }
 
-      if (this.eoblock && gotEOL) {
+      if (this.eoblock && gotEOL && this.byteAlign) {
         code1 = this.lookBits(12);
         if (code1 === 1) {
           this.eatBits(12);
