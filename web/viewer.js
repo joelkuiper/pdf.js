@@ -22,7 +22,7 @@
            DocumentProperties, DocumentOutlineView, DocumentAttachmentsView,
            OverlayManager, PDFFindController, PDFFindBar, getVisibleElements,
            watchScroll, PDFViewer, PDFRenderingQueue, PresentationModeState,
-           DEFAULT_SCALE, UNKNOWN_SCALE,
+           RenderingStates, DEFAULT_SCALE, UNKNOWN_SCALE,
            IGNORE_CURRENT_POSITION_ON_ZOOM: true */
 
 'use strict';
@@ -34,7 +34,7 @@ var MAX_SCALE = 10.0;
 var VIEW_HISTORY_MEMORY = 20;
 var SCALE_SELECT_CONTAINER_PADDING = 8;
 var SCALE_SELECT_PADDING = 22;
-
+var PAGE_NUMBER_LOADING_INDICATOR = 'visiblePageIsLoading';
 //#if B2G
 //PDFJS.useOnlyCssZoom = true;
 //PDFJS.disableTextLayer = true;
@@ -104,6 +104,8 @@ var PDFViewerApplication = {
   animationStartedPromise: null,
   mouseScrollTimeStamp: 0,
   mouseScrollDelta: 0,
+  preferenceSidebarViewOnLoad: SidebarView.NONE,
+  preferencePdfBugEnabled: false,
   isViewerEmbedded: (window.parent !== window),
   url: '',
 
@@ -211,6 +213,7 @@ var PDFViewerApplication = {
       pageCountField: document.getElementById('pageCountField')
     });
 
+    var self = this;
     var initializedPromise = Promise.all([
       Preferences.get('enableWebGL').then(function resolved(value) {
         PDFJS.disableWebGL = !value;
@@ -219,7 +222,7 @@ var PDFViewerApplication = {
         self.preferenceSidebarViewOnLoad = value;
       }),
       Preferences.get('pdfBugEnabled').then(function resolved(value) {
-        self.preferencesPdfBugEnabled = value;
+        self.preferencePdfBugEnabled = value;
       }),
       Preferences.get('disableTextLayer').then(function resolved(value) {
         if (PDFJS.disableTextLayer === true) {
@@ -672,15 +675,19 @@ var PDFViewerApplication = {
       }
     };
 
-    this.destinationsPromise.then(function() {
-      if (typeof dest === 'string') {
-        destString = dest;
-        dest = self.destinations[dest];
-      }
-      if (!(dest instanceof Array)) {
+    var destinationPromise;
+    if (typeof dest === 'string') {
+      destString = dest;
+      destinationPromise = this.pdfDocument.getDestination(dest);
+    } else {
+      destinationPromise = Promise.resolve(dest);
+    }
+    destinationPromise.then(function(destination) {
+      dest = destination;
+      if (!(destination instanceof Array)) {
         return; // invalid destination
       }
-      goToDestination(dest[0]);
+      goToDestination(destination[0]);
     });
   },
 
@@ -875,13 +882,11 @@ var PDFViewerApplication = {
     });
 
     var pagesCount = pdfDocument.numPages;
-
-    var id = pdfDocument.fingerprint;
     document.getElementById('numPages').textContent =
       mozL10n.get('page_of', {pageCount: pagesCount}, 'of {{pageCount}}');
     document.getElementById('pageNumber').max = pagesCount;
 
-    this.documentFingerprint = id;
+    var id = this.documentFingerprint = pdfDocument.fingerprint;
     var store = this.store = new ViewHistory(id);
 
     var pdfViewer = this.pdfViewer;
@@ -983,15 +988,8 @@ var PDFViewerApplication = {
       }
     });
 
-    var destinationsPromise =
-      this.destinationsPromise = pdfDocument.getDestinations();
-    destinationsPromise.then(function(destinations) {
-      self.destinations = destinations;
-    });
-
-    // outline depends on destinations and pagesRefMap
-    var promises = [pagesPromise, destinationsPromise,
-                    this.animationStartedPromise];
+    // outline depends on pagesRefMap
+    var promises = [pagesPromise, this.animationStartedPromise];
     Promise.all(promises).then(function() {
       pdfDocument.getOutline().then(function(outline) {
         var outlineView = document.getElementById('outlineView');
@@ -1484,7 +1482,7 @@ function webViewerInitialized() {
 //#if !PRODUCTION
   if (true) {
 //#else
-//if (PDFViewerApplication.preferencesPdfBugEnabled) {
+//if (PDFViewerApplication.preferencePdfBugEnabled) {
 //#endif
     // Special debugging flags in the hash section of the URL.
     var hash = document.location.hash.substring(1);
@@ -1643,20 +1641,18 @@ function webViewerInitialized() {
       PDFViewerApplication.zoomOut();
     });
 
-  document.getElementById('pageNumber').addEventListener('click',
-    function() {
-      this.select();
-    });
+  document.getElementById('pageNumber').addEventListener('click', function() {
+    this.select();
+  });
 
-  document.getElementById('pageNumber').addEventListener('change',
-    function() {
-      // Handle the user inputting a floating point number.
-      PDFViewerApplication.page = (this.value | 0);
+  document.getElementById('pageNumber').addEventListener('change', function() {
+    // Handle the user inputting a floating point number.
+    PDFViewerApplication.page = (this.value | 0);
 
-      if (this.value !== (this.value | 0).toString()) {
-        this.value = PDFViewerApplication.page;
-      }
-    });
+    if (this.value !== (this.value | 0).toString()) {
+      this.value = PDFViewerApplication.page;
+    }
+  });
 
   document.getElementById('scaleSelect').addEventListener('change',
     function() {
@@ -1753,6 +1749,13 @@ document.addEventListener('pagerendered', function (e) {
 //  }));
 //});
 //#endif
+
+  // If the page is still visible when it has finished rendering,
+  // ensure that the page number input loading indicator is hidden.
+  if ((pageIndex + 1) === PDFViewerApplication.page) {
+    var pageNumberInput = document.getElementById('pageNumber');
+    pageNumberInput.classList.remove(PAGE_NUMBER_LOADING_INDICATOR);
+  }
 }, true);
 
 window.addEventListener('presentationmodechanged', function (e) {
@@ -1794,6 +1797,17 @@ window.addEventListener('updateviewarea', function () {
 
   // Update the current bookmark in the browsing history.
   PDFHistory.updateCurrentBookmark(location.pdfOpenParams, location.pageNumber);
+
+  // Show/hide the loading indicator in the page number input element.
+  var pageNumberInput = document.getElementById('pageNumber');
+  var currentPage =
+    PDFViewerApplication.pdfViewer.getPageView(PDFViewerApplication.page - 1);
+
+  if (currentPage.renderingState === RenderingStates.FINISHED) {
+    pageNumberInput.classList.remove(PAGE_NUMBER_LOADING_INDICATOR);
+  } else {
+    pageNumberInput.classList.add(PAGE_NUMBER_LOADING_INDICATOR);
+  }
 }, true);
 
 window.addEventListener('resize', function webViewerResize(evt) {
