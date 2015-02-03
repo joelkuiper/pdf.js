@@ -75,9 +75,6 @@ var PDFPageView = (function PDFPageViewClosure() {
 
     this.annotationLayer = null;
 
-    var anchor = document.createElement('a');
-    anchor.name = '' + this.id;
-
     var div = document.createElement('div');
     div.id = 'pageContainer' + this.id;
     div.className = 'page';
@@ -86,7 +83,6 @@ var PDFPageView = (function PDFPageViewClosure() {
     this.el = div; // TODO replace 'el' property usage
     this.div = div;
 
-    container.appendChild(anchor);
     container.appendChild(div);
   }
 
@@ -124,7 +120,7 @@ var PDFPageView = (function PDFPageViewClosure() {
       var currentZoomLayer = this.zoomLayer || null;
       var currentAnnotationNode = (keepAnnotations && this.annotationLayer &&
                                    this.annotationLayer.div) || null;
-      for (var i = div.childNodes.length - 1; i >= 0; i--) {
+      for (var i = childNodes.length - 1; i >= 0; i--) {
         var node = childNodes[i];
         if (currentZoomLayer === node || currentAnnotationNode === node) {
           continue;
