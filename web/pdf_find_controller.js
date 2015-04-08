@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals PDFJS, FirefoxCom, Promise */
+/* globals PDFJS, FirefoxCom, Promise, scrollIntoView */
 
 'use strict';
 
@@ -23,6 +23,9 @@ var FindStates = {
   FIND_WRAPPED: 2,
   FIND_PENDING: 3
 };
+
+var FIND_SCROLL_OFFSET_TOP = -50;
+var FIND_SCROLL_OFFSET_LEFT = -400;
 
 /**
  * Provides "search" or "find" functionality for the PDF.
@@ -62,7 +65,8 @@ var PDFFindController = (function PDFFindControllerClosure() {
       '\u201F': '"', // Double high-reversed-9 quotation mark
       '\u00BC': '1/4', // Vulgar fraction one quarter
       '\u00BD': '1/2', // Vulgar fraction one half
-      '\u00BE': '3/4' // Vulgar fraction three quarters
+      '\u00BE': '3/4', // Vulgar fraction three quarters
+      '\u00A0': ' ' // No-break space
     };
     this.findBar = options.findBar || null;
 
@@ -197,8 +201,6 @@ var PDFFindController = (function PDFFindControllerClosure() {
     },
 
     updatePage: function PDFFindController_updatePage(index) {
-      var page = this.pdfViewer.getPageView(index);
-
       if (this.selected.pageIdx === index) {
         // If the page is selected, scroll the page into view, which triggers
         // rendering the page, which adds the textLayer. Once the textLayer is
@@ -206,6 +208,7 @@ var PDFFindController = (function PDFFindControllerClosure() {
         this.pdfViewer.scrollPageIntoView(index + 1);
       }
 
+      var page = this.pdfViewer.getPageView(index);
       if (page.textLayer) {
         page.textLayer.updateMatches();
       }
@@ -299,13 +302,33 @@ var PDFFindController = (function PDFFindControllerClosure() {
           if (this.pagesToSearch < 0) {
             // No point in wrapping again, there were no matches.
             this.updateMatch(false);
-            // while matches were not found, searching for a page 
+            // while matches were not found, searching for a page
             // with matches should nevertheless halt.
             return true;
           }
         }
         // Matches were not found (and searching is not done).
         return false;
+      }
+    },
+
+    /**
+     * The method is called back from the text layer when match presentation
+     * is updated.
+     * @param {number} pageIndex - page index.
+     * @param {number} index - match index.
+     * @param {Array} elements - text layer div elements array.
+     * @param {number} beginIdx - start index of the div array for the match.
+     * @param {number} endIdx - end index of the div array for the match.
+     */
+    updateMatchPosition: function PDFFindController_updateMatchPosition(
+        pageIndex, index, elements, beginIdx, endIdx) {
+      if (this.selected.matchIdx === index &&
+          this.selected.pageIdx === pageIndex) {
+        scrollIntoView(elements[beginIdx], {
+          top: FIND_SCROLL_OFFSET_TOP,
+          left: FIND_SCROLL_OFFSET_LEFT
+        });
       }
     },
 
@@ -332,7 +355,7 @@ var PDFFindController = (function PDFFindControllerClosure() {
       offset.matchIdx = null;
 
       this.pagesToSearch--;
-      
+
       if (offset.pageIdx >= numPages || offset.pageIdx < 0) {
         offset.pageIdx = (previous ? numPages - 1 : 0);
         offset.wrapped = true;
@@ -343,7 +366,7 @@ var PDFFindController = (function PDFFindControllerClosure() {
       var state = FindStates.FIND_NOTFOUND;
       var wrapped = this.offset.wrapped;
       this.offset.wrapped = false;
-    
+
       if (found) {
         var previousPage = this.selected.pageIdx;
         this.selected.pageIdx = this.offset.pageIdx;
@@ -354,7 +377,7 @@ var PDFFindController = (function PDFFindControllerClosure() {
           this.updatePage(previousPage);
         }
       }
-    
+
       this.updateUIState(state, this.state.findPrevious);
       if (this.selected.pageIdx !== -1) {
         this.updatePage(this.selected.pageIdx);
@@ -376,4 +399,3 @@ var PDFFindController = (function PDFFindControllerClosure() {
   };
   return PDFFindController;
 })();
-

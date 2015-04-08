@@ -485,7 +485,7 @@ var LinkAnnotation = (function LinkAnnotationClosure() {
     data.annotationType = AnnotationType.LINK;
 
     var action = dict.get('A');
-    if (action) {
+    if (action && isDict(action)) {
       var linkType = action.get('S').name;
       if (linkType === 'URI') {
         var url = action.get('URI');
@@ -538,11 +538,7 @@ var LinkAnnotation = (function LinkAnnotationClosure() {
     return url;
   }
 
-  Util.inherit(LinkAnnotation, InteractiveAnnotation, {
-    hasOperatorList: function LinkAnnotation_hasOperatorList() {
-      return false;
-    }
-  });
+  Util.inherit(LinkAnnotation, InteractiveAnnotation, { });
 
   return LinkAnnotation;
 })();

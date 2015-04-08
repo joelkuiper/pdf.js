@@ -421,6 +421,13 @@
        "rounds": 1,
        "type": "load"
     },
+    {  "id": "issue5334",
+       "file": "pdfs/issue5334.pdf",
+       "md5": "5575020f37f6e5b3c43b8183bf7f96ae",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
+    },
     {  "id": "bug850854",
        "file": "pdfs/bug850854.pdf",
        "md5": "346a034a80120d123b9fefc42bcb11da",
@@ -485,6 +492,20 @@
        "lastPage": 1,
        "type": "eq"
     },
+    {  "id": "issue4061",
+       "file": "pdfs/issue4061.pdf",
+       "md5": "236aaa8840a47c3c061f8e3034549764",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
+    },
+    {  "id": "issue5202",
+       "file": "pdfs/issue5202.pdf",
+       "md5": "bb9cc69211112e66aab40828086a4e5a",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
+    },
     {  "id": "issue5238",
        "file": "pdfs/issue5238.pdf",
        "md5": "6ddecda00893be1793de20a70c83a3c2",
@@ -499,6 +520,13 @@
        "link": false,
        "type": "eq"
     },
+    {  "id": "issue5501",
+       "file": "pdfs/issue5501.pdf",
+       "md5": "55a60699728fc92f491a2d7d490474e4",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
+    },
     {  "id": "issue5509",
        "file": "pdfs/issue5509.pdf",
        "md5": "1975ef8db7355b1d691bc79d0749574b",
@@ -506,6 +534,13 @@
        "link": true,
        "firstPage": 1,
        "lastPage": 1,
+       "type": "load"
+    },
+    {  "id": "issue5599",
+       "file": "pdfs/issue5599.pdf",
+       "md5": "529a4a9409ac024aeb57a047210280fe",
+       "rounds": 1,
+       "link": false,
        "type": "load"
     },
     {  "id": "txt2pdf",
@@ -521,6 +556,13 @@
        "link": true,
        "rounds": 1,
        "type": "load"
+    },
+    {  "id": "bug1046314",
+       "file": "pdfs/bug1046314.pdf",
+       "md5": "fc658439f44cd2dd27c8bee7e7a8344e",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
     },
     {  "id": "hudsonsurvey",
        "file": "pdfs/hudsonsurvey.pdf",
@@ -944,6 +986,13 @@
        "rounds": 1,
        "type": "eq"
     },
+    {  "id": "issue4379",
+       "file": "pdfs/issue4379.pdf",
+       "md5": "09715ec1a7b0f3a7ae02b3046f627b9f",
+       "link": false,
+       "rounds": 1,
+       "type": "eq"
+    },
     {  "id": "issue4722",
        "file": "pdfs/issue4722.pdf",
        "md5": "a42ca858af7d179358f92f47e57c0fed",
@@ -993,6 +1042,27 @@
       "lastPage": 7,
       "link": true,
       "type": "eq"
+    },
+    {  "id": "issue5704",
+       "file": "pdfs/issue5704.pdf",
+       "md5": "6e0b62585feef24dff2d7e7687cd8128",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
+    },
+    {  "id": "issue5747",
+       "file": "pdfs/issue5747.pdf",
+       "md5": "5c36afc931dd1a3321ffa2e88952d174",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
+    },
+    {  "id": "bug893730",
+       "file": "pdfs/bug893730.pdf",
+       "md5": "2587379fb1b3bbff89c14f0863e78383",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
     },
     {  "id": "pdfkit_compressed",
       "file": "pdfs/pdfkit_compressed.pdf",
@@ -1056,6 +1126,20 @@
       "rounds": 1,
       "lastPage": 1,
       "type": "eq"
+    },
+    {  "id": "bug894572",
+       "file": "pdfs/bug894572.pdf",
+       "md5": "e54a6b0451939f685ed37e3d46e16158",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
+    },
+    {  "id": "bug1108301",
+       "file": "pdfs/bug1108301.pdf",
+       "md5": "cc94cc7e5f5e281dfa7e21020dd90cc7",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
     },
     {  "id": "issue1466",
       "file": "pdfs/issue1466.pdf",
@@ -1265,6 +1349,13 @@
       "md5": "46690a12b953c9ad660f3f6453f8785c",
       "rounds": 1,
       "type": "eq"
+    },
+    {  "id": "issue5734-text",
+       "file": "pdfs/issue5734.pdf",
+       "md5": "2cf88f1786b039ba080623085c87beb9",
+       "link": false,
+       "rounds": 1,
+       "type": "text"
     },
     {  "id": "issue845",
       "file": "pdfs/issue845.pdf",
@@ -1531,6 +1622,15 @@
       "link": true,
       "type": "eq"
     },
+    {  "id": "bug1140761",
+       "file": "pdfs/bug1140761.pdf",
+       "md5": "b74eced7634d4f248dc6265f8225d432",
+       "rounds": 1,
+       "link": true,
+       "firstPage": 1,
+       "lastPage": 1,
+       "type": "eq"
+    },
     {  "id": "bug1011159",
       "file": "pdfs/bug1011159.pdf",
       "md5": "4532e22deb92d4cd2992d0cfe255582a",
@@ -1555,6 +1655,13 @@
        "link": true,
        "firstPage": 1,
        "lastPage": 1,
+       "type": "eq"
+    },
+    {  "id": "issue5726",
+       "file": "pdfs/issue5726.pdf",
+       "md5": "f52f31ad3da316b599cade875ab049db",
+       "rounds": 1,
+       "link": true,
        "type": "eq"
     },
     {  "id": "bug816075",
@@ -1642,6 +1749,20 @@
        "rounds": 1,
        "type": "eq",
        "about": "Invisible Type3 font used for text selection and searching."
+    },
+    {  "id": "issue5421-text",
+       "file": "pdfs/issue5421.pdf",
+       "md5": "273f6813758a2349090003c7c8a0d85e",
+       "link": false,
+       "rounds": 1,
+       "type": "text"
+    },
+    {  "id": "issue5701",
+       "file": "pdfs/issue5701.pdf",
+       "md5": "7ec476aee12e8bd6be79140223d329c1",
+       "rounds": 1,
+       "link": false,
+       "type": "eq"
     },
     {  "id": "issue5280",
       "file": "pdfs/issue5280.pdf",
@@ -1926,6 +2047,13 @@
        "link": true,
        "type": "eq"
     },
+    {  "id": "issue5592",
+       "file": "pdfs/issue5592.pdf",
+       "md5": "a0750f95afa80c880f7966df7062616c",
+       "rounds": 1,
+       "link": true,
+       "type": "eq"
+    },
     {  "id": "issue5549.pdf",
        "file": "pdfs/issue5549.pdf",
        "md5": "6c36df6ebc583c9e18aad0ad00d257b8",
@@ -1946,5 +2074,11 @@
        "rounds": 1,
        "type": "eq",
        "about": "Free image obtained from www.unsplash.com"
+    },
+    {  "id": "issue5567",
+       "file": "pdfs/issue5567.pdf",
+       "md5": "d5b37f8bf1b3aafa1b4fcf19ebdc7c74",
+       "rounds": 1,
+       "type": "eq"
     }
 ]
