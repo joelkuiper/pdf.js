@@ -15,11 +15,11 @@
  * limitations under the License.
  */
 /* globals PDFJS, PDFBug, FirefoxCom, Stats, Cache, ProgressBar,
-           DownloadManager, getFileName, scrollIntoView, getPDFFileNameFromURL,
+           DownloadManager, getFileName, getPDFFileNameFromURL,
            PDFHistory, Preferences, SidebarView, ViewHistory, Stats,
            PDFThumbnailViewer, URL, noContextMenuHandler, SecondaryToolbar,
-           PasswordPrompt, PresentationMode, HandTool, Promise,
-           DocumentProperties, PDFOutlineView, PDFAttachmentView,
+           PasswordPrompt, PDFPresentationMode, HandTool, Promise,
+           PDFDocumentProperties, PDFOutlineView, PDFAttachmentView,
            OverlayManager, PDFFindController, PDFFindBar, getVisibleElements,
            watchScroll, PDFViewer, PDFRenderingQueue, PresentationModeState,
            RenderingStates, DEFAULT_SCALE, UNKNOWN_SCALE,
@@ -65,6 +65,11 @@ var mozL10n = document.mozL10n || document.webL10n;
 //#if GENERIC || CHROME
 //#include download_manager.js
 //#endif
+//#if B2G
+//var DownloadManager = (function DownloadManagerClosure() {
+//  return function DownloadManager() {};
+//})();
+//#endif
 
 //#if FIREFOX || MOZCENTRAL
 //#include firefoxcom.js
@@ -79,11 +84,11 @@ var mozL10n = document.mozL10n || document.webL10n;
 //#include pdf_find_controller.js
 //#include pdf_history.js
 //#include secondary_toolbar.js
-//#include presentation_mode.js
+//#include pdf_presentation_mode.js
 //#include hand_tool.js
 //#include overlay_manager.js
 //#include password_prompt.js
-//#include document_properties.js
+//#include pdf_document_properties.js
 //#include pdf_viewer.js
 //#include pdf_thumbnail_viewer.js
 //#include pdf_outline_view.js
@@ -102,15 +107,18 @@ var PDFViewerApplication = {
   pdfThumbnailViewer: null,
   /** @type {PDFRenderingQueue} */
   pdfRenderingQueue: null,
+  /** @type {PDFPresentationMode} */
+  pdfPresentationMode: null,
+  /** @type {PDFDocumentProperties} */
+  pdfDocumentProperties: null,
   pageRotation: 0,
   updateScaleControls: true,
   isInitialViewSet: false,
   animationStartedPromise: null,
-  mouseScrollTimeStamp: 0,
-  mouseScrollDelta: 0,
   preferenceSidebarViewOnLoad: SidebarView.NONE,
   preferencePdfBugEnabled: false,
   preferenceShowPreviousViewOnLoad: true,
+  preferenceDefaultZoomValue: '',
   isViewerEmbedded: (window.parent !== window),
   url: '',
 
@@ -166,9 +174,27 @@ var PDFViewerApplication = {
       toggleHandTool: document.getElementById('toggleHandTool')
     });
 
+    this.pdfDocumentProperties = new PDFDocumentProperties({
+      overlayName: 'documentPropertiesOverlay',
+      closeButton: document.getElementById('documentPropertiesClose'),
+      fields: {
+        'fileName': document.getElementById('fileNameField'),
+        'fileSize': document.getElementById('fileSizeField'),
+        'title': document.getElementById('titleField'),
+        'author': document.getElementById('authorField'),
+        'subject': document.getElementById('subjectField'),
+        'keywords': document.getElementById('keywordsField'),
+        'creationDate': document.getElementById('creationDateField'),
+        'modificationDate': document.getElementById('modificationDateField'),
+        'creator': document.getElementById('creatorField'),
+        'producer': document.getElementById('producerField'),
+        'version': document.getElementById('versionField'),
+        'pageCount': document.getElementById('pageCountField')
+      }
+    });
+
     SecondaryToolbar.initialize({
       toolbar: document.getElementById('secondaryToolbar'),
-      presentationMode: PresentationMode,
       toggleButton: document.getElementById('secondaryToolbarToggle'),
       presentationModeButton:
         document.getElementById('secondaryPresentationMode'),
@@ -180,18 +206,27 @@ var PDFViewerApplication = {
       lastPage: document.getElementById('lastPage'),
       pageRotateCw: document.getElementById('pageRotateCw'),
       pageRotateCcw: document.getElementById('pageRotateCcw'),
-      documentProperties: DocumentProperties,
       documentPropertiesButton: document.getElementById('documentProperties')
     });
 
-    PresentationMode.initialize({
-      container: container,
-      secondaryToolbar: SecondaryToolbar,
-      firstPage: document.getElementById('contextFirstPage'),
-      lastPage: document.getElementById('contextLastPage'),
-      pageRotateCw: document.getElementById('contextPageRotateCw'),
-      pageRotateCcw: document.getElementById('contextPageRotateCcw')
-    });
+    if (this.supportsFullscreen) {
+      var toolbar = SecondaryToolbar;
+      this.pdfPresentationMode = new PDFPresentationMode({
+        container: container,
+        viewer: viewer,
+        pdfThumbnailViewer: this.pdfThumbnailViewer,
+        contextMenuItems: [
+          { element: document.getElementById('contextFirstPage'),
+            handler: toolbar.firstPageClick.bind(toolbar) },
+          { element: document.getElementById('contextLastPage'),
+            handler: toolbar.lastPageClick.bind(toolbar) },
+          { element: document.getElementById('contextPageRotateCw'),
+            handler: toolbar.pageRotateCwClick.bind(toolbar) },
+          { element: document.getElementById('contextPageRotateCcw'),
+            handler: toolbar.pageRotateCcwClick.bind(toolbar) }
+        ]
+      });
+    }
 
     PasswordPrompt.initialize({
       overlayName: 'passwordOverlay',
@@ -199,23 +234,6 @@ var PDFViewerApplication = {
       passwordText: document.getElementById('passwordText'),
       passwordSubmit: document.getElementById('passwordSubmit'),
       passwordCancel: document.getElementById('passwordCancel')
-    });
-
-    DocumentProperties.initialize({
-      overlayName: 'documentPropertiesOverlay',
-      closeButton: document.getElementById('documentPropertiesClose'),
-      fileNameField: document.getElementById('fileNameField'),
-      fileSizeField: document.getElementById('fileSizeField'),
-      titleField: document.getElementById('titleField'),
-      authorField: document.getElementById('authorField'),
-      subjectField: document.getElementById('subjectField'),
-      keywordsField: document.getElementById('keywordsField'),
-      creationDateField: document.getElementById('creationDateField'),
-      modificationDateField: document.getElementById('modificationDateField'),
-      creatorField: document.getElementById('creatorField'),
-      producerField: document.getElementById('producerField'),
-      versionField: document.getElementById('versionField'),
-      pageCountField: document.getElementById('pageCountField')
     });
 
     var self = this;
@@ -231,9 +249,9 @@ var PDFViewerApplication = {
       }),
       Preferences.get('showPreviousViewOnLoad').then(function resolved(value) {
         self.preferenceShowPreviousViewOnLoad = value;
-        if (!value && window.history.state) {
-          window.history.replaceState(null, '');
-        }
+      }),
+      Preferences.get('defaultZoomValue').then(function resolved(value) {
+        self.preferenceDefaultZoomValue = value;
       }),
       Preferences.get('disableTextLayer').then(function resolved(value) {
         if (PDFJS.disableTextLayer === true) {
@@ -259,7 +277,6 @@ var PDFViewerApplication = {
       Preferences.get('useOnlyCssZoom').then(function resolved(value) {
         PDFJS.useOnlyCssZoom = value;
       })
-
       // TODO move more preferences and other async stuff here
     ]).catch(function (reason) { });
 
@@ -313,8 +330,8 @@ var PDFViewerApplication = {
 
   get supportsFullscreen() {
     var doc = document.documentElement;
-    var support = doc.requestFullscreen || doc.mozRequestFullScreen ||
-                  doc.webkitRequestFullScreen || doc.msRequestFullscreen;
+    var support = !!(doc.requestFullscreen || doc.mozRequestFullScreen ||
+                     doc.webkitRequestFullScreen || doc.msRequestFullscreen);
 
     if (document.fullscreenEnabled === false ||
         document.mozFullScreenEnabled === false ||
@@ -396,7 +413,8 @@ var PDFViewerApplication = {
                                     pdfDataRangeTransport);
 
           if (args.length) {
-            DocumentProperties.setFileSize(args.length);
+            PDFViewerApplication.pdfDocumentProperties
+                                .setFileSize(args.length);
           }
           break;
         case 'range':
@@ -542,7 +560,7 @@ var PDFViewerApplication = {
     );
 
     if (args && args.length) {
-      DocumentProperties.setFileSize(args.length);
+      PDFViewerApplication.pdfDocumentProperties.setFileSize(args.length);
     }
   },
 
@@ -580,22 +598,26 @@ var PDFViewerApplication = {
   },
 
   fallback: function pdfViewFallback(featureId) {
-//#if !(FIREFOX || MOZCENTRAL)
-//  return;
-//#else
-//  // Only trigger the fallback once so we don't spam the user with messages
-//  // for one PDF.
-//  if (this.fellback)
-//    return;
-//  this.fellback = true;
-//  var url = this.url.split('#')[0];
-//  FirefoxCom.request('fallback', { featureId: featureId, url: url },
-//    function response(download) {
-//      if (!download) {
-//        return;
-//      }
-//      PDFViewerApplication.download();
-//    });
+//#if !PRODUCTION
+    if (true) {
+      return;
+    }
+//#endif
+//#if (FIREFOX || MOZCENTRAL)
+    // Only trigger the fallback once so we don't spam the user with messages
+    // for one PDF.
+    if (this.fellback) {
+      return;
+    }
+    this.fellback = true;
+    var url = this.url.split('#')[0];
+    FirefoxCom.request('fallback', { featureId: featureId, url: url },
+      function response(download) {
+        if (!download) {
+          return;
+        }
+        PDFViewerApplication.download();
+      });
 //#endif
   },
 
@@ -839,9 +861,7 @@ var PDFViewerApplication = {
 
     this.pdfDocument = pdfDocument;
 
-    DocumentProperties.url = this.url;
-    DocumentProperties.pdfDocument = pdfDocument;
-    DocumentProperties.resolveDataAvailable();
+    this.pdfDocumentProperties.setDocumentAndUrl(pdfDocument, this.url);
 
     var downloadedPromise = pdfDocument.getDownloadInfo().then(function() {
       self.downloadComplete = true;
@@ -881,48 +901,36 @@ var PDFViewerApplication = {
       if (!PDFJS.disableHistory && !self.isViewerEmbedded) {
         // The browsing history is only enabled when the viewer is standalone,
         // i.e. not when it is embedded in a web page.
+        if (!self.preferenceShowPreviousViewOnLoad && window.history.state) {
+          window.history.replaceState(null, '');
+        }
         PDFHistory.initialize(self.documentFingerprint, self);
       }
-    });
 
-    // Fetch the necessary preference values.
-    var defaultZoomValue;
-    var defaultZoomValuePromise =
-      Preferences.get('defaultZoomValue').then(function (prefValue) {
-        defaultZoomValue = prefValue;
-      });
+      store.initializedPromise.then(function resolved() {
+        var storedHash = null;
+        if (self.preferenceShowPreviousViewOnLoad &&
+            store.get('exists', false)) {
+          var pageNum = store.get('page', '1');
+          var zoom = self.preferenceDefaultZoomValue ||
+                     store.get('zoom', self.pdfViewer.currentScale);
+          var left = store.get('scrollLeft', '0');
+          var top = store.get('scrollTop', '0');
 
-    var storePromise = store.initializedPromise;
-    Promise.all([firstPagePromise, storePromise, defaultZoomValuePromise]).then(
-        function resolved() {
-      var storedHash = null;
-      if (PDFViewerApplication.preferenceShowPreviousViewOnLoad &&
-          store.get('exists', false)) {
-        var pageNum = store.get('page', '1');
-        var zoom = defaultZoomValue ||
-                   store.get('zoom', self.pdfViewer.currentScale);
-        var left = store.get('scrollLeft', '0');
-        var top = store.get('scrollTop', '0');
+          storedHash = 'page=' + pageNum + '&zoom=' + zoom + ',' +
+                       left + ',' + top;
+        } else if (self.preferenceDefaultZoomValue) {
+          storedHash = 'page=1&zoom=' + self.preferenceDefaultZoomValue;
+        }
+        self.setInitialView(storedHash, scale);
 
-        storedHash = 'page=' + pageNum + '&zoom=' + zoom + ',' +
-                     left + ',' + top;
-      } else if (defaultZoomValue) {
-        storedHash = 'page=1&zoom=' + defaultZoomValue;
-      }
-      self.setInitialView(storedHash, scale);
-
-      // Make all navigation keys work on document load,
-      // unless the viewer is embedded in a web page.
-      if (!self.isViewerEmbedded) {
-        self.pdfViewer.focus();
-//#if (FIREFOX || MOZCENTRAL)
-//      self.pdfViewer.blur();
-//#endif
-      }
-    }, function rejected(reason) {
-      console.error(reason);
-
-      firstPagePromise.then(function () {
+        // Make all navigation keys work on document load,
+        // unless the viewer is embedded in a web page.
+        if (!self.isViewerEmbedded) {
+          self.pdfViewer.focus();
+        }
+      }, function rejected(reason) {
+        console.error(reason);
         self.setInitialView(null, scale);
       });
     });
@@ -1030,32 +1038,38 @@ var PDFViewerApplication = {
         self.fallback(PDFJS.UNSUPPORTED_FEATURES.forms);
       }
 
+//#if !PRODUCTION
+      if (true) {
+        return;
+      }
+//#endif
 //#if (FIREFOX || MOZCENTRAL)
-//    var versionId = String(info.PDFFormatVersion).slice(-1) | 0;
-//    var generatorId = 0;
-//    var KNOWN_GENERATORS = ["acrobat distiller", "acrobat pdfwritter",
-//     "adobe livecycle", "adobe pdf library", "adobe photoshop", "ghostscript",
-//     "tcpdf", "cairo", "dvipdfm", "dvips", "pdftex", "pdfkit", "itext",
-//     "prince", "quarkxpress", "mac os x", "microsoft", "openoffice", "oracle",
-//     "luradocument", "pdf-xchange", "antenna house", "aspose.cells", "fpdf"];
-//    var generatorId = 0;
-//    if (info.Producer) {
-//      KNOWN_GENERATORS.some(function (generator, s, i) {
-//        if (generator.indexOf(s) < 0) {
-//          return false;
-//        }
-//        generatorId = i + 1;
-//        return true;
-//      }.bind(null, info.Producer.toLowerCase()));
-//    }
-//    var formType = !info.IsAcroFormPresent ? null : info.IsXFAPresent ?
-//                   'xfa' : 'acroform';
-//    FirefoxCom.request('reportTelemetry', JSON.stringify({
-//      type: 'documentInfo',
-//      version: versionId,
-//      generator: generatorId,
-//      formType: formType
-//    }));
+      var versionId = String(info.PDFFormatVersion).slice(-1) | 0;
+      var generatorId = 0;
+      var KNOWN_GENERATORS = [
+        'acrobat distiller', 'acrobat pdfwriter', 'adobe livecycle',
+        'adobe pdf library', 'adobe photoshop', 'ghostscript', 'tcpdf',
+        'cairo', 'dvipdfm', 'dvips', 'pdftex', 'pdfkit', 'itext', 'prince',
+        'quarkxpress', 'mac os x', 'microsoft', 'openoffice', 'oracle',
+        'luradocument', 'pdf-xchange', 'antenna house', 'aspose.cells', 'fpdf'
+      ];
+      if (info.Producer) {
+        KNOWN_GENERATORS.some(function (generator, s, i) {
+          if (generator.indexOf(s) < 0) {
+            return false;
+          }
+          generatorId = i + 1;
+          return true;
+        }.bind(null, info.Producer.toLowerCase()));
+      }
+      var formType = !info.IsAcroFormPresent ? null : info.IsXFAPresent ?
+                     'xfa' : 'acroform';
+      FirefoxCom.request('reportTelemetry', JSON.stringify({
+        type: 'documentInfo',
+        version: versionId,
+        generator: generatorId,
+        formType: formType
+      }));
 //#endif
     });
   },
@@ -1304,10 +1318,15 @@ var PDFViewerApplication = {
       this.pdfViewer.getPageView(i).beforePrint();
     }
 
+//#if !PRODUCTION
+    if (true) {
+      return;
+    }
+//#endif
 //#if (FIREFOX || MOZCENTRAL)
-//    FirefoxCom.request('reportTelemetry', JSON.stringify({
-//      type: 'print'
-//    }));
+    FirefoxCom.request('reportTelemetry', JSON.stringify({
+      type: 'print'
+    }));
 //#endif
   },
 
@@ -1338,72 +1357,21 @@ var PDFViewerApplication = {
     this.pdfViewer.scrollPageIntoView(pageNumber);
   },
 
-  /**
-   * This function flips the page in presentation mode if the user scrolls up
-   * or down with large enough motion and prevents page flipping too often.
-   *
-   * @this {PDFView}
-   * @param {number} mouseScrollDelta The delta value from the mouse event.
-   */
-  mouseScroll: function pdfViewMouseScroll(mouseScrollDelta) {
-    var MOUSE_SCROLL_COOLDOWN_TIME = 50;
-
-    var currentTime = (new Date()).getTime();
-    var storedTime = this.mouseScrollTimeStamp;
-
-    // In case one page has already been flipped there is a cooldown time
-    // which has to expire before next page can be scrolled on to.
-    if (currentTime > storedTime &&
-        currentTime - storedTime < MOUSE_SCROLL_COOLDOWN_TIME) {
+  requestPresentationMode: function pdfViewRequestPresentationMode() {
+    if (!this.pdfPresentationMode) {
       return;
     }
-
-    // In case the user decides to scroll to the opposite direction than before
-    // clear the accumulated delta.
-    if ((this.mouseScrollDelta > 0 && mouseScrollDelta < 0) ||
-        (this.mouseScrollDelta < 0 && mouseScrollDelta > 0)) {
-      this.clearMouseScrollState();
-    }
-
-    this.mouseScrollDelta += mouseScrollDelta;
-
-    var PAGE_FLIP_THRESHOLD = 120;
-    if (Math.abs(this.mouseScrollDelta) >= PAGE_FLIP_THRESHOLD) {
-
-      var PageFlipDirection = {
-        UP: -1,
-        DOWN: 1
-      };
-
-      // In presentation mode scroll one page at a time.
-      var pageFlipDirection = (this.mouseScrollDelta > 0) ?
-                                PageFlipDirection.UP :
-                                PageFlipDirection.DOWN;
-      this.clearMouseScrollState();
-      var currentPage = this.page;
-
-      // In case we are already on the first or the last page there is no need
-      // to do anything.
-      if ((currentPage === 1 && pageFlipDirection === PageFlipDirection.UP) ||
-          (currentPage === this.pagesCount &&
-           pageFlipDirection === PageFlipDirection.DOWN)) {
-        return;
-      }
-
-      this.page += pageFlipDirection;
-      this.mouseScrollTimeStamp = currentTime;
-    }
+    this.pdfPresentationMode.request();
   },
 
   /**
-   * This function clears the member attributes used with mouse scrolling in
-   * presentation mode.
-   *
-   * @this {PDFView}
+   * @param {number} delta - The delta value from the mouse event.
    */
-  clearMouseScrollState: function pdfViewClearMouseScrollState() {
-    this.mouseScrollTimeStamp = 0;
-    this.mouseScrollDelta = 0;
+  scrollPresentationMode: function pdfViewScrollPresentationMode(delta) {
+    if (!this.pdfPresentationMode) {
+      return;
+    }
+    this.pdfPresentationMode.mouseScroll(delta);
   }
 };
 //#if GENERIC
@@ -1444,7 +1412,7 @@ function webViewerInitialized() {
 //var file = DEFAULT_URL;
 //#endif
 
-//#if !(FIREFOX || MOZCENTRAL || CHROME || B2G)
+//#if GENERIC
   var fileInput = document.createElement('input');
   fileInput.id = 'fileInput';
   fileInput.className = 'fileInput';
@@ -1544,11 +1512,11 @@ function webViewerInitialized() {
   mozL10n.setLanguage(locale);
 //#endif
 //#if (FIREFOX || MOZCENTRAL)
-//if (!PDFViewerApplication.supportsDocumentFonts) {
-//  PDFJS.disableFontFace = true;
-//  console.warn(mozL10n.get('web_fonts_disabled', null,
-//    'Web fonts are disabled: unable to use embedded PDF fonts.'));
-//}
+  if (!PDFViewerApplication.supportsDocumentFonts) {
+    PDFJS.disableFontFace = true;
+    console.warn(mozL10n.get('web_fonts_disabled', null,
+      'Web fonts are disabled: unable to use embedded PDF fonts.'));
+  }
 //#endif
 
   if (!PDFViewerApplication.supportsPrinting) {
@@ -1688,9 +1656,7 @@ function webViewerInitialized() {
     }
     return;
   }
-//#endif
 
-//#if !B2G && !CHROME
   if (file) {
     PDFViewerApplication.open(file, 0);
   }
@@ -1724,41 +1690,51 @@ document.addEventListener('pagerendered', function (e) {
       'An error occurred while rendering the page.'), pageView.error);
   }
 
-//#if (FIREFOX || MOZCENTRAL)
-//FirefoxCom.request('reportTelemetry', JSON.stringify({
-//  type: 'pageInfo'
-//}));
-//// It is a good time to report stream and font types
-//PDFViewerApplication.pdfDocument.getStats().then(function (stats) {
-//  FirefoxCom.request('reportTelemetry', JSON.stringify({
-//    type: 'documentStats',
-//    stats: stats
-//  }));
-//});
-//#endif
-
   // If the page is still visible when it has finished rendering,
   // ensure that the page number input loading indicator is hidden.
   if (pageNumber === PDFViewerApplication.page) {
     var pageNumberInput = document.getElementById('pageNumber');
     pageNumberInput.classList.remove(PAGE_NUMBER_LOADING_INDICATOR);
   }
+
+//#if !PRODUCTION
+  if (true) {
+    return;
+  }
+//#endif
+//#if (FIREFOX || MOZCENTRAL)
+  FirefoxCom.request('reportTelemetry', JSON.stringify({
+    type: 'pageInfo'
+  }));
+  // It is a good time to report stream and font types.
+  PDFViewerApplication.pdfDocument.getStats().then(function (stats) {
+    FirefoxCom.request('reportTelemetry', JSON.stringify({
+      type: 'documentStats',
+      stats: stats
+    }));
+  });
+//#endif
 }, true);
 
 document.addEventListener('textlayerrendered', function (e) {
   var pageIndex = e.detail.pageNumber - 1;
   var pageView = PDFViewerApplication.pdfViewer.getPageView(pageIndex);
 
+//#if !PRODUCTION
+  if (true) {
+    return;
+  }
+//#endif
 //#if (FIREFOX || MOZCENTRAL)
-//if (pageView.textLayer && pageView.textLayer.textDivs &&
-//    pageView.textLayer.textDivs.length > 0 &&
-//    !PDFViewerApplication.supportsDocumentColors) {
-//  console.error(mozL10n.get('document_colors_disabled', null,
-//    'PDF documents are not allowed to use their own colors: ' +
-//    '\'Allow pages to choose their own colors\' ' +
-//    'is deactivated in the browser.'));
-//  PDFViewerApplication.fallback();
-//}
+  if (pageView.textLayer && pageView.textLayer.textDivs &&
+      pageView.textLayer.textDivs.length > 0 &&
+      !PDFViewerApplication.supportsDocumentColors) {
+    console.error(mozL10n.get('document_colors_disabled', null,
+      'PDF documents are not allowed to use their own colors: ' +
+      '\'Allow pages to choose their own colors\' ' +
+      'is deactivated in the browser.'));
+    PDFViewerApplication.fallback();
+  }
 //#endif
 }, true);
 
@@ -1835,7 +1811,7 @@ window.addEventListener('hashchange', function webViewerHashchange(evt) {
   }
 });
 
-//#if !(FIREFOX || MOZCENTRAL || CHROME)
+//#if GENERIC
 window.addEventListener('change', function webViewerChange(evt) {
   var files = evt.target.files;
   if (!files || files.length === 0) {
@@ -1982,10 +1958,12 @@ function handleMouseWheel(evt) {
               evt.wheelDelta / MOUSE_WHEEL_DELTA_FACTOR;
   var direction = (ticks < 0) ? 'zoomOut' : 'zoomIn';
 
-  if (PresentationMode.active) {
+  if (PDFViewerApplication.pdfViewer.isInPresentationMode) {
     evt.preventDefault();
-    PDFViewerApplication.mouseScroll(ticks * MOUSE_WHEEL_DELTA_FACTOR);
-  } else if (evt.ctrlKey) { // Only zoom the pages, not the entire viewer
+    PDFViewerApplication.scrollPresentationMode(ticks *
+                                                MOUSE_WHEEL_DELTA_FACTOR);
+  } else if (evt.ctrlKey || evt.metaKey) {
+    // Only zoom the pages, not the entire viewer.
     evt.preventDefault();
     PDFViewerApplication[direction](Math.abs(ticks));
   }
@@ -1995,15 +1973,9 @@ window.addEventListener('DOMMouseScroll', handleMouseWheel);
 window.addEventListener('mousewheel', handleMouseWheel);
 
 window.addEventListener('click', function click(evt) {
-  if (!PresentationMode.active) {
-    if (SecondaryToolbar.opened &&
+  if (SecondaryToolbar.opened &&
       PDFViewerApplication.pdfViewer.containsElement(evt.target)) {
-      SecondaryToolbar.close();
-    }
-  } else if (evt.button === 0) {
-    // Necessary since preventDefault() in 'mousedown' won't stop
-    // the event propagation in all circumstances in presentation mode.
-    evt.preventDefault();
+    SecondaryToolbar.close();
   }
 }, false);
 
@@ -2018,15 +1990,13 @@ window.addEventListener('keydown', function keydown(evt) {
             (evt.shiftKey ? 4 : 0) |
             (evt.metaKey ? 8 : 0);
 
+  var pdfViewer = PDFViewerApplication.pdfViewer;
+  var isViewerInPresentationMode = pdfViewer && pdfViewer.isInPresentationMode;
+
   // First, handle the key bindings that are independent whether an input
   // control is selected or not.
   if (cmd === 1 || cmd === 8 || cmd === 5 || cmd === 12) {
     // either CTRL or META key with optional SHIFT.
-    var pdfViewer = PDFViewerApplication.pdfViewer;
-    var inPresentationMode = pdfViewer &&
-      (pdfViewer.presentationModeState === PresentationModeState.CHANGING ||
-       pdfViewer.presentationModeState === PresentationModeState.FULLSCREEN);
-
     switch (evt.keyCode) {
       case 70: // f
         if (!PDFViewerApplication.supportsIntegratedFind) {
@@ -2045,7 +2015,7 @@ window.addEventListener('keydown', function keydown(evt) {
       case 107: // FF '+' and '='
       case 187: // Chrome '+'
       case 171: // FF with German keyboard
-        if (!inPresentationMode) {
+        if (!isViewerInPresentationMode) {
           PDFViewerApplication.zoomIn();
         }
         handled = true;
@@ -2053,14 +2023,14 @@ window.addEventListener('keydown', function keydown(evt) {
       case 173: // FF/Mac '-'
       case 109: // FF '-'
       case 189: // Chrome '-'
-        if (!inPresentationMode) {
+        if (!isViewerInPresentationMode) {
           PDFViewerApplication.zoomOut();
         }
         handled = true;
         break;
       case 48: // '0'
       case 96: // '0' on Numpad of Swedish keyboard
-        if (!inPresentationMode) {
+        if (!isViewerInPresentationMode) {
           // keeping it unhandled (to restore page zoom to 100%)
           setTimeout(function () {
             // ... and resetting the scale after browser adjusts its scale
@@ -2088,7 +2058,7 @@ window.addEventListener('keydown', function keydown(evt) {
   if (cmd === 3 || cmd === 10) {
     switch (evt.keyCode) {
       case 80: // p
-        SecondaryToolbar.presentationModeClick();
+        PDFViewerApplication.requestPresentationMode();
         handled = true;
         break;
       case 71: // g
@@ -2122,15 +2092,15 @@ window.addEventListener('keydown', function keydown(evt) {
       case 38: // up arrow
       case 33: // pg up
       case 8: // backspace
-        if (!PresentationMode.active &&
-          PDFViewerApplication.currentScaleValue !== 'page-fit') {
+        if (!isViewerInPresentationMode &&
+            PDFViewerApplication.currentScaleValue !== 'page-fit') {
           break;
         }
         /* in presentation mode */
         /* falls through */
       case 37: // left arrow
         // horizontal scrolling using arrow keys
-        if (PDFViewerApplication.pdfViewer.isHorizontalScrollbarEnabled) {
+        if (pdfViewer.isHorizontalScrollbarEnabled) {
           break;
         }
         /* falls through */
@@ -2153,14 +2123,14 @@ window.addEventListener('keydown', function keydown(evt) {
       case 40: // down arrow
       case 34: // pg down
       case 32: // spacebar
-        if (!PresentationMode.active &&
+        if (!isViewerInPresentationMode &&
             PDFViewerApplication.currentScaleValue !== 'page-fit') {
           break;
         }
         /* falls through */
       case 39: // right arrow
         // horizontal scrolling using arrow keys
-        if (PDFViewerApplication.pdfViewer.isHorizontalScrollbarEnabled) {
+        if (pdfViewer.isHorizontalScrollbarEnabled) {
           break;
         }
         /* falls through */
@@ -2171,13 +2141,13 @@ window.addEventListener('keydown', function keydown(evt) {
         break;
 
       case 36: // home
-        if (PresentationMode.active || PDFViewerApplication.page > 1) {
+        if (isViewerInPresentationMode || PDFViewerApplication.page > 1) {
           PDFViewerApplication.page = 1;
           handled = true;
         }
         break;
       case 35: // end
-        if (PresentationMode.active || (PDFViewerApplication.pdfDocument &&
+        if (isViewerInPresentationMode || (PDFViewerApplication.pdfDocument &&
             PDFViewerApplication.page < PDFViewerApplication.pagesCount)) {
           PDFViewerApplication.page = PDFViewerApplication.pagesCount;
           handled = true;
@@ -2185,7 +2155,7 @@ window.addEventListener('keydown', function keydown(evt) {
         break;
 
       case 72: // 'h'
-        if (!PresentationMode.active) {
+        if (!isViewerInPresentationMode) {
           HandTool.toggle();
         }
         break;
@@ -2198,7 +2168,7 @@ window.addEventListener('keydown', function keydown(evt) {
   if (cmd === 4) { // shift-key
     switch (evt.keyCode) {
       case 32: // spacebar
-        if (!PresentationMode.active &&
+        if (!isViewerInPresentationMode &&
             PDFViewerApplication.currentScaleValue !== 'page-fit') {
           break;
         }
@@ -2212,40 +2182,33 @@ window.addEventListener('keydown', function keydown(evt) {
     }
   }
 
-  if (!handled && !PresentationMode.active) {
+  if (!handled && !isViewerInPresentationMode) {
     // 33=Page Up  34=Page Down  35=End    36=Home
     // 37=Left     38=Up         39=Right  40=Down
     if (evt.keyCode >= 33 && evt.keyCode <= 40 &&
-        !PDFViewerApplication.pdfViewer.containsElement(curElement)) {
+        !pdfViewer.containsElement(curElement)) {
       // The page container is not focused, but a page navigation key has been
       // pressed. Change the focus to the viewer container to make sure that
       // navigation by keyboard works as expected.
-      PDFViewerApplication.pdfViewer.focus();
+      pdfViewer.focus();
     }
     // 32=Spacebar
-    if (evt.keyCode === 32 && curElementTagName !== 'BUTTON') {
-//#if (FIREFOX || MOZCENTRAL)
-//    // Workaround for issue in Firefox, that prevents scroll keys from
-//    // working when elements with 'tabindex' are focused. (#3498)
-//    PDFViewerApplication.pdfViewer.blur();
-//#else
-      if (!PDFViewerApplication.pdfViewer.containsElement(curElement)) {
-        PDFViewerApplication.pdfViewer.focus();
-      }
-//#endif
+    if (evt.keyCode === 32 && curElementTagName !== 'BUTTON' &&
+        !pdfViewer.containsElement(curElement)) {
+      pdfViewer.focus();
     }
   }
 
   if (cmd === 2) { // alt-key
     switch (evt.keyCode) {
       case 37: // left arrow
-        if (PresentationMode.active) {
+        if (isViewerInPresentationMode) {
           PDFHistory.back();
           handled = true;
         }
         break;
       case 39: // right arrow
-        if (PresentationMode.active) {
+        if (isViewerInPresentationMode) {
           PDFHistory.forward();
           handled = true;
         }
@@ -2255,7 +2218,6 @@ window.addEventListener('keydown', function keydown(evt) {
 
   if (handled) {
     evt.preventDefault();
-    PDFViewerApplication.clearMouseScrollState();
   }
 });
 

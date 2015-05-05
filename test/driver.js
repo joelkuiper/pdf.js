@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals PDFJS, combineUrl, StatTimer, SpecialPowers, Promise */
+/* globals PDFJS, combineUrl, StatTimer, Promise */
 
 'use strict';
 
@@ -23,10 +23,6 @@
  */
 (function DriverClosure() {
 
-// Disable worker support for running test as
-//   https://github.com/mozilla/pdf.js/pull/764#issuecomment-2638944
-//   "firefox-bin: Fatal IO error 12 (Cannot allocate memory) on X server :1."
-// PDFJS.disableWorker = true;
 PDFJS.enableStats = true;
 PDFJS.cMapUrl = '../external/bcmaps/';
 PDFJS.cMapPacked = true;
@@ -367,11 +363,7 @@ function quitApp() {
   document.body.innerHTML = 'Tests are finished. <h1>CLOSE ME!</h1>' +
                              document.body.innerHTML;
   sendQuitRequest(function () {
-    if (window.SpecialPowers) {
-      SpecialPowers.quit();
-    } else {
-      window.close();
-    }
+    window.close();
   });
 }
 
