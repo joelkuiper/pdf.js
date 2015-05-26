@@ -2,15 +2,18 @@
 *.error
 
 !tracemonkey.pdf
+!franz.pdf
 !issue2391-1.pdf
 !issue2391-2.pdf
 !issue5801.pdf
+!issue5972.pdf
 !filled-background.pdf
 !ArabicCIDTrueType.pdf
 !ThuluthFeatures.pdf
 !arial_unicode_ab_cidfont.pdf
 !arial_unicode_en_cidfont.pdf
 !asciihexdecode.pdf
+!bug1050040.pdf
 !canvas.pdf
 !complex_ttf_font.pdf
 !extgstate.pdf
@@ -33,6 +36,7 @@
 !bug894572.pdf
 !bug911034.pdf
 !bug1108301.pdf
+!bug1157493.pdf
 !pdfjsbad1586.pdf
 !freeculture.pdf
 !pdfkit_compressed.pdf
@@ -125,3 +129,7 @@
 !issue5481.pdf
 !issue5567.pdf
 !issue5701.pdf
+!issue5896.pdf
+!issue5909.pdf
+!issue6010_1.pdf
+!issue6010_2.pdf
