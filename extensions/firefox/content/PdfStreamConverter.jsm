@@ -183,27 +183,38 @@ function makeContentReadable(obj, window) {
 
 function createNewChannel(uri, node, principal) {
 //#if !MOZCENTRAL
-  if (!NetUtil.newChannel2) {
+  if (NetUtil.newChannel2) {
+    return NetUtil.newChannel2(uri,
+                               null,
+                               null,
+                               node, // aLoadingNode
+                               principal, // aLoadingPrincipal
+                               null, // aTriggeringPrincipal
+                               Ci.nsILoadInfo.SEC_NORMAL,
+                               Ci.nsIContentPolicy.TYPE_OTHER);
+  }
+  // The signature of `NetUtil.newChannel` changed in Firefox 38,
+  // see https://bugzilla.mozilla.org/show_bug.cgi?id=1125618.
+  var ffVersion = parseInt(Services.appinfo.platformVersion);
+  if (ffVersion < 38) {
     return NetUtil.newChannel(uri);
   }
 //#endif
-  return NetUtil.newChannel2(uri,
-                             null,
-                             null,
-                             node, // aLoadingNode
-                             principal, // aLoadingPrincipal
-                             null, // aTriggeringPrincipal
-                             Ci.nsILoadInfo.SEC_NORMAL,
-                             Ci.nsIContentPolicy.TYPE_OTHER);
+  return NetUtil.newChannel({
+    uri: uri,
+    loadingNode: node,
+    loadingPrincipal: principal,
+    contentPolicyType: Ci.nsIContentPolicy.TYPE_OTHER,
+  });
 }
 
 function asyncFetchChannel(channel, callback) {
 //#if !MOZCENTRAL
-  if (!NetUtil.newChannel2) {
-    return NetUtil.asyncFetch(channel, callback);
+  if (NetUtil.asyncFetch2) {
+    return NetUtil.asyncFetch2(channel, callback);
   }
 //#endif
-  return NetUtil.asyncFetch2(channel, callback);
+  return NetUtil.asyncFetch(channel, callback);
 }
 
 // PDF data storage
@@ -482,9 +493,23 @@ ChromeActions.prototype = {
       message = getLocalizedString(strings, 'unsupported_feature');
     }
     PdfJsTelemetry.onFallback();
-    PdfjsContentUtils.displayWarning(domWindow, message, sendResponse,
+    PdfjsContentUtils.displayWarning(domWindow, message,
       getLocalizedString(strings, 'open_with_different_viewer'),
       getLocalizedString(strings, 'open_with_different_viewer', 'accessKey'));
+
+    let winmm = domWindow.QueryInterface(Ci.nsIInterfaceRequestor)
+                         .getInterface(Ci.nsIDocShell)
+                         .QueryInterface(Ci.nsIInterfaceRequestor)
+                         .getInterface(Ci.nsIContentFrameMessageManager);
+
+    winmm.addMessageListener('PDFJS:Child:fallbackDownload',
+      function fallbackDownload(msg) {
+        let data = msg.data;
+        sendResponse(data.download);
+
+        winmm.removeMessageListener('PDFJS:Child:fallbackDownload',
+                                    fallbackDownload);
+      });
   },
   updateFindControlState: function(data) {
     if (!this.supportsIntegratedFind()) {
@@ -501,8 +526,6 @@ ChromeActions.prototype = {
 
     var winmm = this.domWindow.QueryInterface(Ci.nsIInterfaceRequestor)
                               .getInterface(Ci.nsIDocShell)
-                              .sameTypeRootTreeItem
-                              .QueryInterface(Ci.nsIDocShell)
                               .QueryInterface(Ci.nsIInterfaceRequestor)
                               .getInterface(Ci.nsIContentFrameMessageManager);
 
@@ -815,8 +838,6 @@ function FindEventManager(contentWindow) {
   this.contentWindow = contentWindow;
   this.winmm = contentWindow.QueryInterface(Ci.nsIInterfaceRequestor)
                             .getInterface(Ci.nsIDocShell)
-                            .sameTypeRootTreeItem
-                            .QueryInterface(Ci.nsIDocShell)
                             .QueryInterface(Ci.nsIInterfaceRequestor)
                             .getInterface(Ci.nsIContentFrameMessageManager);
 }
@@ -860,6 +881,9 @@ PdfStreamConverter.prototype = {
   classID: Components.ID('{PDFJSSCRIPT_STREAM_CONVERTER_ID}'),
   classDescription: 'pdf.js Component',
   contractID: '@mozilla.org/streamconv;1?from=application/pdf&to=*/*',
+
+  classID2: Components.ID('{PDFJSSCRIPT_STREAM_CONVERTER2_ID}'),
+  contractID2: '@mozilla.org/streamconv;1?from=application/pdf&to=text/html',
 
   QueryInterface: XPCOMUtils.generateQI([
       Ci.nsISupports,

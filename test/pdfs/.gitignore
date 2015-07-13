@@ -2,14 +2,19 @@
 *.error
 
 !tracemonkey.pdf
+!franz.pdf
 !issue2391-1.pdf
 !issue2391-2.pdf
+!issue5801.pdf
+!issue5972.pdf
+!issue5874.pdf
 !filled-background.pdf
 !ArabicCIDTrueType.pdf
 !ThuluthFeatures.pdf
 !arial_unicode_ab_cidfont.pdf
 !arial_unicode_en_cidfont.pdf
 !asciihexdecode.pdf
+!bug1050040.pdf
 !canvas.pdf
 !complex_ttf_font.pdf
 !extgstate.pdf
@@ -18,8 +23,11 @@
 !sizes.pdf
 !close-path-bug.pdf
 !issue4630.pdf
+!issue4909.pdf
 !issue5202.pdf
 !issue5280.pdf
+!issue5677.pdf
+!issue5954.pdf
 !alphatrans.pdf
 !devicen.pdf
 !cmykjpeg.pdf
@@ -30,7 +38,9 @@
 !bug847420.pdf
 !bug860632.pdf
 !bug894572.pdf
+!bug911034.pdf
 !bug1108301.pdf
+!bug1157493.pdf
 !pdfjsbad1586.pdf
 !freeculture.pdf
 !pdfkit_compressed.pdf
@@ -48,6 +58,7 @@
 !issue5734.pdf
 !issue4875.pdf
 !issue4881.pdf
+!issue5994.pdf
 !rotated.pdf
 !issue1249.pdf
 !issue1171.pdf
@@ -63,6 +74,7 @@
 !bug868745.pdf
 !mmtype1.pdf
 !issue5704.pdf
+!issue5751.pdf
 !bug893730.pdf
 !bug864847.pdf
 !issue1002.pdf
@@ -80,6 +92,7 @@
 !issue5501.pdf
 !issue5599.pdf
 !issue5747.pdf
+!issue6099.pdf
 !gradientfill.pdf
 !bug903856.pdf
 !bug850854.pdf
@@ -88,6 +101,8 @@
 !bug1028735.pdf
 !bug1046314.pdf
 !bug1065245.pdf
+!bug1151216.pdf
+!bug1175962.pdf
 !basicapi.pdf
 !mixedfonts.pdf
 !shading_extend.pdf
@@ -117,8 +132,18 @@
 !issue4800.pdf
 !issue4801.pdf
 !issue5334.pdf
+!issue5540.pdf
 !issue5549.pdf
 !issue5475.pdf
+!annotation-border-styles.pdf
 !issue5481.pdf
 !issue5567.pdf
 !issue5701.pdf
+!issue5896.pdf
+!issue5909.pdf
+!issue6010_1.pdf
+!issue6010_2.pdf
+!issue6068.pdf
+!issue6081.pdf
+!issue6069.pdf
+!issue6108.pdf
