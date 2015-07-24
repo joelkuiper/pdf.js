@@ -17,7 +17,7 @@
 /* globals PDFJS, Util, isDict, isName, stringToPDFString, warn, Dict, Stream,
            stringToBytes, Promise, isArray, ObjectLoader, OperatorList,
            isValidUrl, OPS, createPromiseCapability, AnnotationType,
-           stringToUTF8String, AnnotationBorderStyleType */
+           stringToUTF8String, AnnotationBorderStyleType, ColorSpace */
 
 'use strict';
 
@@ -75,32 +75,13 @@ var Annotation = (function AnnotationClosure() {
     var data = this.data = {};
 
     data.subtype = dict.get('Subtype').name;
-    var rect = dict.get('Rect') || [0, 0, 0, 0];
-    data.rect = Util.normalizeRect(rect);
     data.annotationFlags = dict.get('F');
 
-    var color = dict.get('C');
-    if (!color) {
-      // The PDF spec does not mention how a missing color array is interpreted.
-      // Adobe Reader seems to default to black in this case.
-      data.color = [0, 0, 0];
-    } else if (isArray(color)) {
-      switch (color.length) {
-        case 0:
-          // Empty array denotes transparent border.
-          data.color = null;
-          break;
-        case 1:
-          // TODO: implement DeviceGray
-          break;
-        case 3:
-          data.color = color;
-          break;
-        case 4:
-          // TODO: implement DeviceCMYK
-          break;
-      }
-    }
+    this.setRectangle(dict.get('Rect'));
+    data.rect = this.rectangle;
+
+    this.setColor(dict.get('C'));
+    data.color = this.color;
 
     this.borderStyle = data.borderStyle = new AnnotationBorderStyle();
     this.setBorderStyle(dict);
@@ -111,6 +92,63 @@ var Annotation = (function AnnotationClosure() {
   }
 
   Annotation.prototype = {
+    /**
+     * Set the rectangle.
+     *
+     * @public
+     * @memberof Annotation
+     * @param {Array} rectangle - The rectangle array with exactly four entries
+     */
+    setRectangle: function Annotation_setRectangle(rectangle) {
+      if (isArray(rectangle) && rectangle.length === 4) {
+        this.rectangle = Util.normalizeRect(rectangle);
+      } else {
+        this.rectangle = [0, 0, 0, 0];
+      }
+    },
+
+    /**
+     * Set the color and take care of color space conversion.
+     *
+     * @public
+     * @memberof Annotation
+     * @param {Array} color - The color array containing either 0
+     *                        (transparent), 1 (grayscale), 3 (RGB) or
+     *                        4 (CMYK) elements
+     */
+    setColor: function Annotation_setColor(color) {
+      var rgbColor = new Uint8Array(3); // Black in RGB color space (default)
+      if (!isArray(color)) {
+        this.color = rgbColor;
+        return;
+      }
+
+      switch (color.length) {
+        case 0: // Transparent, which we indicate with a null value
+          this.color = null;
+          break;
+
+        case 1: // Convert grayscale to RGB
+          ColorSpace.singletons.gray.getRgbItem(color, 0, rgbColor, 0);
+          this.color = rgbColor;
+          break;
+
+        case 3: // Convert RGB percentages to RGB
+          ColorSpace.singletons.rgb.getRgbItem(color, 0, rgbColor, 0);
+          this.color = rgbColor;
+          break;
+
+        case 4: // Convert CMYK to RGB
+          ColorSpace.singletons.cmyk.getRgbItem(color, 0, rgbColor, 0);
+          this.color = rgbColor;
+          break;
+
+        default:
+          this.color = rgbColor;
+          break;
+      }
+    },
+
     /**
      * Set the border style (as AnnotationBorderStyle object).
      *
@@ -138,7 +176,6 @@ var Annotation = (function AnnotationClosure() {
           this.borderStyle.setHorizontalCornerRadius(array[0]);
           this.borderStyle.setVerticalCornerRadius(array[1]);
           this.borderStyle.setWidth(array[2]);
-          this.borderStyle.setStyle('S');
 
           if (array.length === 4) { // Dash array available
             this.borderStyle.setDashArray(array[3]);
@@ -152,10 +189,6 @@ var Annotation = (function AnnotationClosure() {
         // See also https://github.com/mozilla/pdf.js/issues/6179.
         this.borderStyle.setWidth(0);
       }
-    },
-
-    getData: function Annotation_getData() {
-      return this.data;
     },
 
     isInvisible: function Annotation_isInvisible() {
