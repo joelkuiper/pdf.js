@@ -508,6 +508,13 @@ var GlyphMapForStandardFonts = {
   '3316': 578, '3379': 42785, '3393': 1159, '3416': 8377
 };
 
+// The glyph map for ArialBlack differs slightly from the glyph map used for
+// other well-known standard fonts. Hence we use this (incomplete) CID to GID
+// mapping to adjust the glyph map for non-embedded ArialBlack fonts.
+var SupplementalGlyphMapForArialBlack = {
+  '227': 322, '264': 261, '291': 346,
+};
+
 // Some characters, e.g. copyrightserif, are mapped to the private use area and
 // might not be displayed using standard fonts. Mapping/hacking well-known chars
 // to the similar equivalents in the normal characters range.
@@ -2396,6 +2403,32 @@ var OpenTypeFileBuilder = (function OpenTypeFileBuilderClosure() {
   return OpenTypeFileBuilder;
 })();
 
+// Problematic Unicode characters in the fonts that needs to be moved to avoid
+// issues when they are painted on the canvas, e.g. complex-script shaping or
+// control/whitespace characters. The ranges are listed in pairs: the first item
+// is a code of the first problematic code, the second one is the next
+// non-problematic code. The ranges must be in sorted order.
+var ProblematicCharRanges = new Int32Array([
+  // Control characters.
+  0x0000, 0x0020,
+  0x007F, 0x00A1,
+  0x00AD, 0x00AE,
+  // Chars that is used in complex-script shaping.
+  0x0600, 0x0780,
+  0x08A0, 0x10A0,
+  0x1780, 0x1800,
+  // General punctuation chars.
+  0x2000, 0x2010,
+  0x2011, 0x2012,
+  0x2028, 0x2030,
+  0x205F, 0x2070,
+  0x25CC, 0x25CD,
+  // Chars that is used in complex-script shaping.
+  0xAA60, 0xAA80,
+  // Specials Unicode block.
+  0xFFF0, 0x10000
+]);
+
 /**
  * 'Font' is the class the outside world should use, it encapsulate all the font
  * decoding logics whatever type it is (assuming the font type is supported).
@@ -2490,8 +2523,13 @@ var Font = (function FontClosure() {
         // Standard fonts might be embedded as CID font without glyph mapping.
         // Building one based on GlyphMapForStandardFonts.
         var map = [];
-        for (var code in GlyphMapForStandardFonts) {
-          map[+code] = GlyphMapForStandardFonts[code];
+        for (charCode in GlyphMapForStandardFonts) {
+          map[+charCode] = GlyphMapForStandardFonts[charCode];
+        }
+        if (/ArialBlack/i.test(name)) {
+          for (charCode in SupplementalGlyphMapForArialBlack) {
+            map[+charCode] = SupplementalGlyphMapForArialBlack[charCode];
+          }
         }
         var isIdentityUnicode = this.toUnicode instanceof IdentityToUnicodeMap;
         if (!isIdentityUnicode) {
@@ -2679,31 +2717,18 @@ var Font = (function FontClosure() {
    * @return {boolean}
    */
   function isProblematicUnicodeLocation(code) {
-    if (code <= 0x1F) { // Control chars
-      return true;
+    // Using binary search to find a range start.
+    var i = 0, j = ProblematicCharRanges.length - 1;
+    while (i < j) {
+      var c = (i + j + 1) >> 1;
+      if (code < ProblematicCharRanges[c]) {
+        j = c - 1;
+      } else {
+        i = c;
+      }
     }
-    if (code >= 0x80 && code <= 0x9F) { // Control chars
-      return true;
-    }
-    if ((code >= 0x2000 && code <= 0x200F) || // General punctuation chars
-        (code >= 0x2028 && code <= 0x202F) ||
-        (code >= 0x2060 && code <= 0x206F)) {
-      return true;
-    }
-    if (code >= 0xFFF0 && code <= 0xFFFF) { // Specials Unicode block
-      return true;
-    }
-    switch (code) {
-      case 0x7F: // Control char
-      case 0xA0: // Non breaking space
-      case 0xAD: // Soft hyphen
-      case 0x0E33: // Thai character SARA AM
-      case 0x2011: // Non breaking hyphen
-      case 0x205F: // Medium mathematical space
-      case 0x25CC: // Dotted circle (combining mark)
-        return true;
-    }
-    return false;
+    // Even index means code in problematic range.
+    return !(i & 1);
   }
 
   /**
@@ -4126,13 +4151,22 @@ var Font = (function FontClosure() {
         }
       }
 
-      var charCodeToGlyphId = [], charCode, toUnicode = properties.toUnicode;
+      var charCodeToGlyphId = [], charCode;
+      var toUnicode = properties.toUnicode, widths = properties.widths;
+      var skipToUnicode = (toUnicode instanceof IdentityToUnicodeMap ||
+                           toUnicode.length === 0x10000);
 
-      function hasGlyph(glyphId, charCode) {
+      // Helper function to try to skip mapping of empty glyphs.
+      // Note: In some cases, just relying on the glyph data doesn't work,
+      //       hence we also use a few heuristics to fix various PDF files.
+      function hasGlyph(glyphId, charCode, widthCode) {
         if (!missingGlyphs[glyphId]) {
           return true;
         }
-        if (charCode >= 0 && toUnicode.has(charCode)) {
+        if (!skipToUnicode && charCode >= 0 && toUnicode.has(charCode)) {
+          return true;
+        }
+        if (widths && widthCode >= 0 && isNum(widths[widthCode])) {
           return true;
         }
         return false;
@@ -4152,7 +4186,7 @@ var Font = (function FontClosure() {
           }
 
           if (glyphId >= 0 && glyphId < numGlyphs &&
-              hasGlyph(glyphId, charCode)) {
+              hasGlyph(glyphId, charCode, cid)) {
             charCodeToGlyphId[charCode] = glyphId;
           }
         });
@@ -4213,18 +4247,19 @@ var Font = (function FontClosure() {
             var found = false;
             for (i = 0; i < cmapMappingsLength; ++i) {
               if (cmapMappings[i].charCode === unicodeOrCharCode &&
-                  hasGlyph(cmapMappings[i].glyphId, unicodeOrCharCode)) {
+                  hasGlyph(cmapMappings[i].glyphId, unicodeOrCharCode, -1)) {
                 charCodeToGlyphId[charCode] = cmapMappings[i].glyphId;
                 found = true;
                 break;
               }
             }
             if (!found && properties.glyphNames) {
-              // Try to map using the post table. There are currently no known
-              // pdfs that this fixes.
+              // Try to map using the post table.
               var glyphId = properties.glyphNames.indexOf(glyphName);
-              if (glyphId > 0 && hasGlyph(glyphId, -1)) {
+              if (glyphId > 0 && hasGlyph(glyphId, -1, -1)) {
                 charCodeToGlyphId[charCode] = glyphId;
+              } else {
+                charCodeToGlyphId[charCode] = 0; // notdef
               }
             }
           }

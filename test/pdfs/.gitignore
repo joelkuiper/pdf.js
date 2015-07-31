@@ -7,6 +7,7 @@
 !issue2391-2.pdf
 !issue5801.pdf
 !issue5972.pdf
+!issue5874.pdf
 !filled-background.pdf
 !ArabicCIDTrueType.pdf
 !ThuluthFeatures.pdf
@@ -21,9 +22,14 @@
 !simpletype3font.pdf
 !sizes.pdf
 !close-path-bug.pdf
+!issue2948.pdf
+!issue6231_1.pdf
 !issue4630.pdf
+!issue4909.pdf
 !issue5202.pdf
 !issue5280.pdf
+!issue5677.pdf
+!issue5954.pdf
 !alphatrans.pdf
 !devicen.pdf
 !cmykjpeg.pdf
@@ -54,6 +60,7 @@
 !issue5734.pdf
 !issue4875.pdf
 !issue4881.pdf
+!issue5994.pdf
 !rotated.pdf
 !issue1249.pdf
 !issue1171.pdf
@@ -87,6 +94,7 @@
 !issue5501.pdf
 !issue5599.pdf
 !issue5747.pdf
+!issue6099.pdf
 !gradientfill.pdf
 !bug903856.pdf
 !bug850854.pdf
@@ -95,6 +103,8 @@
 !bug1028735.pdf
 !bug1046314.pdf
 !bug1065245.pdf
+!bug1151216.pdf
+!bug1175962.pdf
 !basicapi.pdf
 !mixedfonts.pdf
 !shading_extend.pdf
@@ -124,8 +134,10 @@
 !issue4800.pdf
 !issue4801.pdf
 !issue5334.pdf
+!issue5540.pdf
 !issue5549.pdf
 !issue5475.pdf
+!annotation-border-styles.pdf
 !issue5481.pdf
 !issue5567.pdf
 !issue5701.pdf
@@ -133,3 +145,9 @@
 !issue5909.pdf
 !issue6010_1.pdf
 !issue6010_2.pdf
+!issue6068.pdf
+!issue6081.pdf
+!issue6069.pdf
+!issue6106.pdf
+!bug1001080.pdf
+!issue6108.pdf

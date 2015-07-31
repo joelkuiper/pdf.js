@@ -17,7 +17,8 @@
 'use strict';
 
 var CSS_UNITS = 96.0 / 72.0;
-var DEFAULT_SCALE = 'auto';
+var DEFAULT_SCALE_VALUE = 'auto';
+var DEFAULT_SCALE = 1.0;
 var UNKNOWN_SCALE = 0;
 var MAX_AUTO_SCALE = 1.25;
 var SCROLLBAR_PADDING = 40;
@@ -177,6 +178,21 @@ function watchScroll(viewAreaElement, callback) {
   var rAF = null;
   viewAreaElement.addEventListener('scroll', debounceScroll, true);
   return state;
+}
+
+/**
+ * Helper function to parse query string (e.g. ?param1=value&parm2=...).
+ */
+function parseQueryString(query) {
+  var parts = query.split('&');
+  var params = {};
+  for (var i = 0, ii = parts.length; i < ii; ++i) {
+    var param = parts[i].split('=');
+    var key = param[0].toLowerCase();
+    var value = param.length > 1 ? param[1] : null;
+    params[decodeURIComponent(key)] = decodeURIComponent(value);
+  }
+  return params;
 }
 
 /**
