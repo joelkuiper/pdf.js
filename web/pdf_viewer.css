@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 @import url(text_layer_builder.css);
-@import url(annotations_layer_builder.css);
+@import url(annotation_layer_builder.css);
 
 .pdfViewer .canvasWrapper {
   overflow: hidden;
@@ -34,6 +34,15 @@
 
 .pdfViewer.removePageBorders .page {
   margin: 0px auto 10px auto;
+  border: none;
+}
+
+.pdfViewer.singlePageView {
+  display: inline-block;
+}
+
+.pdfViewer.singlePageView .page {
+  margin: 0;
   border: none;
 }
 

@@ -1,5 +1,3 @@
-/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 /* Copyright 2012 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -17,6 +15,16 @@
 
 'use strict';
 
+(function (root, factory) {
+  if (typeof define === 'function' && define.amd) {
+    define('pdfjs-web/pdf_presentation_mode', ['exports'], factory);
+  } else if (typeof exports !== 'undefined') {
+    factory(exports);
+  } else {
+    factory((root.pdfjsWebPDFPresentationMode = {}));
+  }
+}(this, function (exports) {
+
 var DELAY_BEFORE_RESETTING_SWITCH_IN_PROGRESS = 1500; // in ms
 var DELAY_BEFORE_HIDING_CONTROLS = 3000; // in ms
 var ACTIVE_SELECTOR = 'pdfPresentationMode';
@@ -27,8 +35,7 @@ var CONTROLS_SELECTOR = 'pdfPresentationModeControls';
  * @property {HTMLDivElement} container - The container for the viewer element.
  * @property {HTMLDivElement} viewer - (optional) The viewer element.
  * @property {PDFViewer} pdfViewer - The document viewer.
- * @property {PDFThumbnailViewer} pdfThumbnailViewer - (optional) The thumbnail
- *   viewer.
+ * @property {EventBus} eventBus - The application event bus.
  * @property {Array} contextMenuItems - (optional) The menuitems that are added
  *   to the context menu in Presentation Mode.
  */
@@ -45,7 +52,7 @@ var PDFPresentationMode = (function PDFPresentationModeClosure() {
     this.container = options.container;
     this.viewer = options.viewer || options.container.firstElementChild;
     this.pdfViewer = options.pdfViewer;
-    this.pdfThumbnailViewer = options.pdfThumbnailViewer || null;
+    this.eventBus = options.eventBus;
     var contextMenuItems = options.contextMenuItems || null;
 
     this.active = false;
@@ -55,13 +62,26 @@ var PDFPresentationMode = (function PDFPresentationModeClosure() {
     this.mouseScrollDelta = 0;
 
     if (contextMenuItems) {
-      for (var i = 0, ii = contextMenuItems.length; i < ii; i++) {
-        var item = contextMenuItems[i];
-        item.element.addEventListener('click', function (handler) {
-          this.contextMenuOpen = false;
-          handler();
-        }.bind(this, item.handler));
-      }
+      contextMenuItems.contextFirstPage.addEventListener('click',
+          function PDFPresentationMode_contextFirstPageClick(e) {
+        this.contextMenuOpen = false;
+        this.eventBus.dispatch('firstpage');
+      }.bind(this));
+      contextMenuItems.contextLastPage.addEventListener('click',
+          function PDFPresentationMode_contextLastPageClick(e) {
+        this.contextMenuOpen = false;
+        this.eventBus.dispatch('lastpage');
+      }.bind(this));
+      contextMenuItems.contextPageRotateCw.addEventListener('click',
+          function PDFPresentationMode_contextPageRotateCwClick(e) {
+        this.contextMenuOpen = false;
+        this.eventBus.dispatch('rotatecw');
+      }.bind(this));
+      contextMenuItems.contextPageRotateCcw.addEventListener('click',
+          function PDFPresentationMode_contextPageRotateCcwClick(e) {
+        this.contextMenuOpen = false;
+        this.eventBus.dispatch('rotateccw');
+      }.bind(this));
     }
   }
 
@@ -158,12 +178,11 @@ var PDFPresentationMode = (function PDFPresentationModeClosure() {
      * @private
      */
     _notifyStateChange: function PDFPresentationMode_notifyStateChange() {
-      var event = document.createEvent('CustomEvent');
-      event.initCustomEvent('presentationmodechanged', true, true, {
+      this.eventBus.dispatch('presentationmodechanged', {
+        source: this,
         active: this.active,
         switchInProgress: !!this.switchInProgress
       });
-      window.dispatchEvent(event);
     },
 
     /**
@@ -247,10 +266,6 @@ var PDFPresentationMode = (function PDFPresentationModeClosure() {
       this._resetMouseScrollState();
       this.container.removeAttribute('contextmenu');
       this.contextMenuOpen = false;
-
-      if (this.pdfThumbnailViewer) {
-        this.pdfThumbnailViewer.ensureThumbnailVisible(page);
-      }
     },
 
     /**
@@ -398,3 +413,6 @@ var PDFPresentationMode = (function PDFPresentationModeClosure() {
 
   return PDFPresentationMode;
 })();
+
+exports.PDFPresentationMode = PDFPresentationMode;
+}));

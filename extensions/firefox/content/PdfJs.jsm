@@ -1,5 +1,3 @@
-/* -*- Mode: Java; tab-width: 2; indent-tabs-mode: nil; c-basic-offset: 2 -*- */
-/* vim: set shiftwidth=2 tabstop=2 autoindent cindent expandtab: */
 /* Copyright 2012 Mozilla Foundation
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +13,8 @@
  * limitations under the License.
  */
 /* jshint esnext:true */
-/* globals Components, Services, XPCOMUtils, PdfjsChromeUtils, PdfRedirector,
-           PdfjsContentUtils, DEFAULT_PREFERENCES, PdfStreamConverter */
+/* globals Components, Services, XPCOMUtils, PdfjsChromeUtils,
+           PdfjsContentUtils, PdfStreamConverter */
 
 'use strict';
 
@@ -43,7 +41,7 @@ const PDF_CONTENT_TYPE = 'application/pdf';
 Cu.import('resource://gre/modules/XPCOMUtils.jsm');
 Cu.import('resource://gre/modules/Services.jsm');
 
-let Svc = {};
+var Svc = {};
 XPCOMUtils.defineLazyServiceGetter(Svc, 'mime',
                                    '@mozilla.org/mime;1',
                                    'nsIMIMEService');
@@ -79,7 +77,11 @@ function isDefaultHandler() {
 }
 
 function initializeDefaultPreferences() {
-//#include ../../../web/default_preferences.js
+  var DEFAULT_PREFERENCES =
+//#include ../../../web/default_preferences.json
+//#if false
+    'end of DEFAULT_PREFERENCES';
+//#endif
 
   var defaultBranch = Services.prefs.getDefaultBranch(PREF_PREFIX + '.');
   var defaultValue;
@@ -130,7 +132,7 @@ Factory.prototype = {
   }
 };
 
-let PdfJs = {
+var PdfJs = {
   QueryInterface: XPCOMUtils.generateQI([Ci.nsIObserver]),
   _registered: false,
   _initialized: false,
@@ -264,7 +266,7 @@ let PdfJs = {
   /**
    * pdf.js is only enabled if it is both selected as the pdf viewer and if the
    * global switch enabling it is true.
-   * @return {boolean} Wether or not it's enabled.
+   * @return {boolean} Whether or not it's enabled.
    */
   get enabled() {
     var disabled = getBoolPref(PREF_DISABLED, true);
